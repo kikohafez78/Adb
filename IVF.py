@@ -20,7 +20,7 @@ class IVFile(object):
         for k in index:
             byte_file = np.asarray(k)
             print(centroids[x])
-            centroid_assignment[x] = centroids[x]
+            centroid_assignment[str(centroids[x])] = f"./data/file{x}.npy"
             file = open(f"./data/file{x}.npy",'a')
             np.save(f"./data/file{x}.npy", byte_file)
             file.close()
@@ -28,4 +28,6 @@ class IVFile(object):
             k = None
         self.assigments =  centroid_assignment
         return self.assigments 
-    def get_cluster_data(centroid: np.ndarray, assignment: np.ndarray):
+    
+    def get_cluster_data(centroid: np.ndarray):
+        
