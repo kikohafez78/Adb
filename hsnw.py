@@ -1,15 +1,15 @@
 # ==================================================
 # Authors: 1-Omar Badr                             |
-#         2-Karim Hafez                           |
-#         3-Abdulhameed                           |
-#         4-Seif albaghdady                       |
+#         2-Karim Hafez                            |
+#         3-Abdulhameed                            |
+#         4-Seif albaghdady                        |
 # Subject: ADB                                     |
 # Project: HNSW +                                  |
 # ==================================================
-from product_quantization import quantizer
+# from product_quantization import quantizer
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity, cosine_distances
-import threading
+# import threading
 import math
 
 # import numba as nm
@@ -71,10 +71,11 @@ class vector_db(object):
 
     ##################### Search Layer #####################
     def search_layer(
+        self,
         query_element: np.ndarray,
         entry_points: list[(int, Node)],
         ef_search: int,
-        layer: int,
+        layer: int
     ):
         entry_points = sorted_list_by_cosine_similarity(
             entry_points, query_element
@@ -181,9 +182,9 @@ class vector_db(object):
         #     self.max_layers = l
         #     l_max = l
         #     entry_points = []
-        # else:
         for layer in range(l_max, l + 1):
             W = self.search_layer(q, entry_points, 1, layer)
+            print("=========================================================================================\n")
             entry_points = [W[0]]
 
         # for each layer from l_max to l
@@ -222,7 +223,14 @@ class vector_db(object):
                 
     
     def graph_creation(self):
-        pass
+        vectors = np.random.normal(size=(100,dimension))
+        x = 0
+        for vector in vectors:
+            print(f"inserted{x}")
+            self.insertion(vector,self.M,self.M_MAX,self.efConstruction,self.ml)
+            x += 1
+        print(len(self.graph[self.max_layers]))
 
 
-
+hnsw = vector_db(10,10,10)
+hnsw.graph_creation()
