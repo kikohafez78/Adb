@@ -26,17 +26,19 @@ nbits = 8
 
 
 class Node(object):
-    def __init__(self, vector: np.ndarray, M: int, layer: int, M_MAX: int):
+    def __init__(self, vector: np.ndarray, M: int, layer: int, M_MAX: int,mL: float):
         self.vec = vector
         self.M = M
         self.layer = layer
         self.M_MAX = M_MAX
         self.friends_list: list[Node] = []  # list of Node
-
+        self.layers =  np.round(float[-math.log(random.uniform(0,1))*mL])
     # @nm.set(fast_math = True)
     def get_distance_n_similarity(self, vector: np.ndarray):
         return cosine_similarity(self.vec, vector)
-
+    def get_neighbors_list(self):
+        return self.friends_list
+    
 def calculate_distances(heap: list, q: np.ndarray):
     heap = [(cosine_similarity(node.vec, q), node) for node in heap]
     return heap
@@ -130,7 +132,30 @@ class vector_db(object):
         extendCandidates=False,
         keepPrunedConnections=False,
     ):
-        pass
+        R = np.ndarray([])
+        W = np.copy(C[:][1])
+        if extendCandidates:
+            for e in C[:][1]:
+                neighbors = e.get_neighbors_list()
+                for neighbor in neighbors:
+                    if neighbor not in W:
+                        np.insert(W,Node,neighbor)
+        W_d = list()
+        W = sorted_list_by_cosine_similarity(W,query_element,False)
+        while len(W) > 0 and len(R) < M:
+            e = W.pop(0)
+            if e[1].layers >= layer:
+                if len(R) == 0:
+                    np.insert(R,list,e)
+                else:
+                    if e[0] < np.min(R,axis = 0):
+                        np.insert(R,list,e)
+                    else:
+                        W_d.append(e)
+        if keepPrunedConnections:
+            while len(W_d) > 0 and len(R) < M:
+                np.insert(R,list,W_d.pop(0))
+        return R
 
     def select_neighbors_knn(self, query_element, ef_search, layer):
         pass

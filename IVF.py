@@ -3,7 +3,15 @@ from scipy.cluster.vq import kmeans2
 from sklearn.metrics.pairwise import cosine_similarity
 from operator import itemgetter
 
+def sort_vectors_by_cosine_similarity(vectors, reference_vector):
 
+
+  # Calculate cosine similarities
+  cos_similarities = cosine_similarity(reference_vector,vectors)
+  # Sort indices by cosine similarity
+  sorted_indices = np.argsort(cos_similarities)
+
+  return sorted_indices
 def sort_list(list1, list2):
  
     zipped_pairs = zip(list2, list1)
@@ -23,7 +31,7 @@ class IVFile(object):
         self.data = (centroids, assignments)
         index= [[] for _ in range(self.partitions)]
         for n,k in enumerate(assignments):
-            index[k].append(n)
+            index[k].append(self.vectors[n])
         centroid_assignment = {}
         x = 0
         for k in index:
@@ -39,26 +47,40 @@ class IVFile(object):
     
     def get_closest_centroids(self, vector: np.ndarray, K: int):
         centroids = self.data[0]
-        distances = np.absolute(cosine_similarity(vector,centroids))
-        return sort_list(centroids,distances)
+        index = sort_vectors_by_cosine_similarity(centroids,vector)
+        centroids = centroids[index]
+        return centroids[0][len(centroids)-K-1:]
     
     def get_cluster_data(self, centroid: np.ndarray, vector: np.ndarray, K: int):
         data = np.load(self.assigments[str(centroid)])
-        distances = cosine_similarity(vector,data)
-        indices = np.argpartition(distances,K)[:K]
-        sorted_indices = indices[np.argsort(data[indices])]
-        return data[sorted_indices]
+        index = sort_vectors_by_cosine_similarity(data,vector)
+        data = data[index]
+        return data[0][len(data)-K-1:]
+
+    def get_closest_k_neighbors(self, vector: np.ndarray, K: int):
+        centroids = self.get_closest_centroids(vector,K)
+        closest = []
+        for centroid in centroids:
+            closest.append(self.get_cluster_data(centroid,vector,K))
+        closest = np.asarray(closest)
+        closest = closest.reshape((closest.shape[0]*closest.shape[1],closest.shape[2]))
+        indices = sort_vectors_by_cosine_similarity(closest,vector)
+        return [closest[i] for i in indices[0][len(closest)-K-1:]]
     
-# K = 3
-# num_partions = 16
-# dataset = np.random.normal(size = (1000,10))
-# Iv = IVFile(num_partions, dataset)
-# a = Iv.clustering()
-# test_vector = np.random.normal(size= (1,10))
-# #===========================================================================
-# print("test-vector:",test_vector)
-# #===========================================================================
-# # print("centroid to file: ",a,"\n")
-# #===========================================================================
-# closest= Iv.get_closest_centroids(test_vector, K)
-# print(f"{K} closest clusters are: ",closest)
+K = 3
+num_partions = 16
+dataset = np.random.normal(size = (1000,3))
+Iv = IVFile(num_partions, dataset)
+a = Iv.clustering()
+test_vector = np.random.normal(size= (1,3))
+#===========================================================================
+print("test-vector:",test_vector)
+#===========================================================================
+print("centroid to file: ",a,"\n")
+#===========================================================================
+# print(Iv.get_closest_centroids(test_vector,K),"\n",cosine_similarity(Iv.get_closest_centroids(test_vector,K),test_vector))
+#===========================================================================
+closest= Iv.get_closest_k_neighbors(test_vector,K)
+print(f"{K} closest vectors are: ",closest,cosine_similarity(closest,test_vector))
+
+
