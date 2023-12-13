@@ -26,20 +26,24 @@ nbits = 8
 
 
 class Node(object):
-    def __init__(self, vector: np.ndarray, M: int, all_layers: int, M_MAX: int):
+    def __init__(self, vector: np.ndarray, M: int, layer: int, M_MAX: int):
         self.vec = vector
         self.M = M
-        self.layers = all_layers
+        self.layer = layer
         self.M_MAX = M_MAX
-        self.friends_list = []  # list of tuples (cosine_similarity, node)
+        self.friends_list: list[Node] = []  # list of Node
 
     # @nm.set(fast_math = True)
     def get_distance_n_similarity(self, vector: np.ndarray):
         return cosine_similarity(self.vec, vector)
 
+def calculate_distances(heap: list, q: np.ndarray):
+    heap = [(cosine_similarity(node.vec, q), node) for node in heap]
+    return heap
+
 
 # functions for creating a heap that are sorted by cosine similarity between elements and query vector
-def sorted_list_by_cosine_similarity(heap: list, query_vector: np.ndarray):
+def sorted_list_by_cosine_similarity(heap: list, query_vector: np.ndarray) -> list[(int, Node)]:
     heap = [(cosine_similarity(node.vec, query_vector), node) for node in heap]
     heap.sort(reverse=True)  # sort descending
     return heap
@@ -58,35 +62,12 @@ class vector_db(object):
         self.M_MAX = 2 * M  # just a heuristic (based on the paper)
         self.efSearch = efSearch
         self.efConstruction = efConstruction
-        self.Layers = -1
+        self.entry_points = []
         self.max_layers = 0
         self.ml = 1.0 / math.log(M)
-        self.graph = np.empty((0, 0), dtype=Node)
+        self.graph: list[list[Node]] = np.array([[]], dtype=Node)
 
-    """
-    SEARCH-LAYER(q, ep, ef, lc)
-        Input: query element q, enter points ep, number of nearest to q elements to return ef, layer number lc
-        Output: ef closest neighbors to q
-        1 v ← ep // set of visited elements   
-        2 C ← ep // set of candidates
-        3 W ← ep // dynamic list of found nearest neighbors, W is the set of ef closest neighbors to q at layer lc
-        4 while │C│ > 0
-        5 c ← extract nearest element from C to q
-        6 f ← get furthest element from W to q
-        7 if distance(c, q) > distance(f, q)
-        8 break // all elements in W are evaluated
-        9 for each e ∈ neighbourhood(c) at layer lc // update C and W
-        10 if e ∉ v
-        11 v ← v ⋃ e
-        12 f ← get furthest element from W to q
-        13 if distance(e, q) < distance(f, q) or │W│ < ef
-        14 C ← C ⋃ e
-        15 W ← W ⋃ e
-        16 if │W│ > ef
-        17 remove furthest element from W to q
-        18 return W 
-    """
-
+    ##################### Search Layer #####################
     def search_layer(
         query_element: np.ndarray,
         entry_points: list[(int, Node)],
@@ -109,7 +90,8 @@ class vector_db(object):
             if c[0] > f[0]:
                 break
             # iterate over friend list of c, where you will update candidates and results accordingly.
-            for e in c[1].friends_list:
+            friends = calculate_distances(c[1].friends_list, query_element)
+            for e in friends:
                 if e not in v:
                     v.append(e)
                     v.sort(reversed=True)
@@ -121,12 +103,14 @@ class vector_db(object):
                         W.sort(reversed=True)
                         if len(W) > ef_search:
                             W.pop()
-        return W
+        return W  # return the list of nearest neighbors
 
+    ################# Select Nearest Neighbors #####################
     def select_neighbors_simple(
         self, query_element: np.ndarray, C: list[(int, Node)], M: int
-    ):
-        return sorted_list_by_cosine_similarity(C, query_element)[0:M]
+    ) -> list[(int, Node)]:
+        size = len(C) if len(C) <= M else M
+        return sorted_list_by_cosine_similarity(C, query_element)[0:size]
 
     """
     SELECT-NEIGHBORS-HEURISTIC(q, C, M, lc, extendCandidates, keepPrunedConnections)
@@ -134,13 +118,13 @@ class vector_db(object):
         return M, layer number lc, flag indicating whether or not to extend
         candidate list extendCandidates, flag indicating whether or not to add
         discarded elements keepPrunedConnections
-
+              
     """
 
     def select_neighbors_heuristic(
         self,
         query_element: np.ndarray,
-        C : list[(int, Node)],
+        C: list[(int, Node)],
         M: int,
         layer: int,
         extendCandidates=False,
@@ -151,11 +135,69 @@ class vector_db(object):
     def select_neighbors_knn(self, query_element, ef_search, layer):
         pass
 
-    def insertion(self, q: Node, normalization_factor):
-        """
-        q: query vector
-        normalization_factor: normalization factor of the query vector
-        """
+    ##################### Insertion #####################
 
+    """
+    INSERT(hnsw, q, M, Mmax, efConstruction, mL)
+        Input: multilayer graph hnsw, new element q, number of established
+        connections M, maximum number of connections for each element
+        per layer Mmax, size of the dynamic candidate list efConstruction, normalization factor for level generation mL
+        
+    """
+
+    def insertion(self, q: np.ndarray, M: int, Mmax: int, efConstruction: int, mL: int):
+        W = []
+        entry_points = self.entry_points
+        l_max = self.max_layers
+        l = math.floor(-math.log(random.uniform(0, 1)) * mL)
+        # if l > l_max:
+        #     for layer in range(l_max, l, -1):
+        #         self.graph[layer].append(Node(q, M, layer, Mmax))
+        #     self.max_layers = l
+        #     l_max = l
+        #     entry_points = []
+        # else:
+        for layer in range(l_max, l + 1):
+            W = self.search_layer(q, entry_points, 1, layer)
+            entry_points = [W[0]]
+
+        # for each layer from l_max to l
+        for layer in range(l_max, l, -1):
+            # if layer is not empty
+            if len(self.graph[layer]) > 0:
+                # get nearest neighbors from layer
+                W = self.search_layer(q, entry_points, efConstruction, layer)
+                entry_points = W[0:M] if len(W) > M else W
+            else:
+                # if layer is empty then add q to entry points
+                entry_points.append((0, q))
+
+        # for each layer from min(l_max,l) to 0
+        for layer in range(min(l_max, l), 0, -1):
+            # get nearest neighbors from layer
+            W = self.search_layer(q, entry_points, efConstruction, layer)
+            # select M nearest neighbors from W
+            neighbors = self.select_neighbors_simple(q, W, M)
+            # add bidirectional connections from neighbors to q at layer
+            for neighbor in neighbors:
+                neighbor[1].friends_list.append(q) 
+                q.friends_list.append(neighbor[1])
+            # After adding bidirectional connections, check if the number of connections exceeds Mmax
+            for neighbor in neighbors:
+                if len(neighbor[1].friends_list) > Mmax:
+                    # select Mmax nearest neighbors from neighbor
+                    candidates = self.select_neighbors_simple(
+                        neighbor[1].vec, neighbor[1].friends_list, Mmax
+                    )
+                    neighbor[1].friends_list = candidates
+            entry_points = neighbors
+            if l > l_max:
+                self.max_layers = l
+                entry_points = [Node(q, M, layer, Mmax)]
+                
+    
     def graph_creation(self):
         pass
+
+
+
