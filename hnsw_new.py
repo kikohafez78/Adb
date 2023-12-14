@@ -1,6 +1,6 @@
 import math
 import random
-from heapq import heapify, heappop, heappush, heappushpop
+from heapq import heapify, heappop, heappush, heappushpop, heapreplace, nlargest
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -45,7 +45,7 @@ class HNSW(object):
         self.entry_points = None
         self.max_layers = 0
         self.ml = 1.0 / math.log2(M)  # the closer to 1/ln(M) the better
-        self.graph: list[list[dict[int, int]]] = []  # graph[layer][node_id] = {neighbor: distance}
+        self.graph: list[dict[int : [dict[int, int]]]] = []  # graph[layer]{indx: {neighbor: distance}}
         self.data = np.ndarray([])  # data[node_id] = vector
 
     """
@@ -76,22 +76,25 @@ class HNSW(object):
         heapify(candidates)
 
         while candidates:
-            similarity, point = heappop(candidates)  # most similar node
+            currrent_similarity, point = heappop(candidates)  # most similar node
             ref = -entry_points[0][0]  # Most similar node in the heap
+            if currrent_similarity < ref:  # if the similarity is lower than the most similar node in the heap
+                break
             neighbors = [neighbor for neighbor in level[point] if neighbor not in visited]
             similarities = calculate_distances([data[neighbor] for neighbor in neighbors], query_element)
             visited.update(neighbors)
 
             for neighbor, similarity in zip(neighbors, similarities):
                 if len(entry_points) < ef_search:
-                    heappush(entry_points, (-similarity, neighbor))
+                    heappush(entry_points, (similarity, neighbor))
                     heappush(candidates, (-similarity, neighbor))
-                    ref = entry_points[0][0]
+                    ref = -entry_points[0][0]
                 else:
                     if similarity > ref:
-                        heappushpop(entry_points, (-similarity, neighbor))
-                        heappushpop(candidates, (-similarity, neighbor))
-                        ref = entry_points[0][0]                   
+                        heappushpop(entry_points, (-similarity, neighbor))  # replace the lowest similarity with the new one
+                        heappush(candidates, (-similarity, neighbor))
+                        ref = -entry_points[0][0]
+        return entry_points
 
     """
       This is similar to search_layer but with ef=1, The idea is to find the closest neighbor in the graph layer
@@ -109,15 +112,62 @@ class HNSW(object):
       10- return the best and best_dist --> this is a single node unlike search_layer where it returns a heap of nodes.
     """
 
-    def search_layer_ef1(self, q: np.ndarray, dist: int, entry_point: int, layer: int) -> (int, Node):
+    def search_layer_ef1(self, q: np.ndarray, dist: int, entry_point: (int, int), layer: int) -> (int, Node):
         """
         - equivalent to search_layer(q, entry_points, ef, layer) with ef = 1
         - Mainly we used to traverse the layers of the graph that are bigger than highest layer of query element
         """
-        pass
+        level = self.graph[layer]
+        data = self.data
+        M = self.M
+        visited = set([entry_point[1]])
+        candidates = [entry_point]
+        best = entry_point
+        best_sim = dist
+        while candidates:
+            currrent_similarity, point = heappop(candidates)
+            if currrent_similarity < best_sim:  # if the similarity is lower than the most similar node in the heap
+                break
+            neighbors = [neighbor for neighbor in level[point] if neighbor not in visited]
+            similarities = calculate_distances([data[neighbor] for neighbor in neighbors], q)
+            visited.update(neighbors)
+            for neighbor, similarity in zip(neighbors, similarities):
+                if similarity > best_sim:
+                    best = neighbor
+                    best_sim = similarity
+                heappush(candidates, (similarity, neighbor))
+        return best, best_sim
 
-    def select_neighbors_simple(self, query_element: np.ndarray, C: list[(int, Node)], M: int) -> list[(int, Node)]:
-        pass
+    """
+      if it's not a heap: we will operate in simple mode (naive)
+      1- first check if the node have place in friend list
+      2- if it has place in friend list, add it to the friend list
+      3- else, check if the node is closer to the query than the farthest friend
+      4- if it is closer, add it to the friend list and remove the farthest friend
+      else: we will opereate in complex mode (heap)
+      1- M select the largest cosine similarity from the heap
+      2- check if the node have place in friend list
+      3- if it has place in friend list, then add friends to the friend list until it's full
+      4- the remaining friends from M largest are not all added to the friend list.
+      5  check the furthest friends in the friend list and check if you can replace them with remaining M largest
+      6- Now we will go through all friends and add us to their friend list (bidirectional)
+    """
+
+    def select_neighbors_simple(self, to_be_inserted: (int, int), C: list[(int, int)], M: int, layer: int) -> list[(int, int)]:
+        C = nlargest(C, M)
+        sim, index = to_be_inserted
+        d = self.graph[layer][index]
+        remaining = M - len(d)
+        d.update(C[:remaining])  # add the remaining friends to the friend list
+        if remaining > 0:
+            # check the furthest friends in the friend list and check if you can replace them with remaining M largest
+            for i in range(remaining, len(C)):
+                if C[i][0] > min(d):
+                    d.pop(min(d, key=d.get))
+                    d.update(C[i])
+        # Now we will go through all friends and add us to their friend list (bidirectional)
+        for i in d:
+            self.graph[layer][i].update(index)
 
     def select_neighbors_heuristic(
         self,
