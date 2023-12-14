@@ -1,8 +1,8 @@
 # ==================================================
 # Authors: 1-Omar Badr                             |
-#         2-Karim Hafez                            |
-#         3-Abdulhameed                            |
-#         4-Seif albaghdady                        |
+#          2-Karim Hafez                            |
+#          3-Abdulhameed                            |
+#          4-Seif albaghdady                        |
 # Subject: ADB                                     |
 # Project: HNSW +                                  |
 # ==================================================
@@ -12,10 +12,12 @@ import math
 
 # import numba as nm
 import random
-from heapq import heappop, heappush
+from heapq import *
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_distances, cosine_similarity
+
+import IVF as ivf
 
 dimension = 70
 segments = 14
@@ -91,9 +93,7 @@ class vector_db(object):
         ef_search: int,
         layer: int,
     ):
-        entry_points = sorted_list_by_cosine_similarity(
-            entry_points, query_element
-        )  # sort entry points by cosine similarity
+        entry_points = sorted_list_by_cosine_similarity(entry_points, query_element)  # sort entry points by cosine similarity
         v = entry_points.copy()  # visited elements
         C = entry_points.copy()  # candidates
         W = entry_points.copy()  # dynamic list of found nearest neighbors
@@ -238,5 +238,33 @@ class vector_db(object):
         print(len(self.graph[self.max_layers]))
 
 
+# hnsw = vector_db(10, 10, 10)
+# hnsw.graph_creation()
+
+# read data from file saved_db.csv
+
+
+#############################################################################
+
+
+def read_data():
+    data = np.genfromtxt("saved_db.csv", delimiter=",")
+    return data
+
+
+data = read_data()
+
+
+Iv = ivf.IVFile(4096, data)
+
+centroids = Iv.clustering()
+
+# give centroids to hnsw then use get_closest_k_neighbors to get the closest k neighbors
 hnsw = vector_db(10, 10, 10)
+
 hnsw.graph_creation()
+
+# loop over centroids
+
+for centroid in centroids:
+    hnsw.get_closest_k_neighbors(centroid, 10)
