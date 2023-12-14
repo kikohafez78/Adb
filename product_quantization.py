@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging as log
 import numpy as np
 from sklearn.cluster import  KMeans as km
-from sklearn.metrics.pairwise import euclidean_distances,cosine_similarity,cosine_distances
+from sklearn.metrics.pairwise import cosine_similarity
 import numba
 BITS2DTYPE ={
     8: np.unit8,
@@ -27,7 +27,7 @@ class quantizer(object):
         self.codes: np.ndarray | None = None
         
         
-    @numba.njit(fast_math = True)
+    # @numba.njit(fast_math = True)
     def train(self, X:np.ndarray):
         if self.is_trained:
             raise ValueError("Training has been done")
@@ -51,7 +51,7 @@ class quantizer(object):
             raise ValueError("not trained yet")
         self.codes = self.encode(X)
         
-    @numba.njit(fast_math = True)
+    # @numba.njit(fast_math = True)
     def get_asymmetric_distances(self, X: np.ndarray):
         if not self.is_trained:
             raise ValueError("no trained")
@@ -63,13 +63,13 @@ class quantizer(object):
         for i in range(self.m):
             X_i = X[:][i*self.ds:(i+1)*self.ds]
             centers = self.estimators[i].cluster_centers_
-            distance_table[:,i,:] = cosine_distances(X_i,centers,squared=True)
+            distance_table[:,i,:] = cosine_similarity(X_i,centers,squared=True)
         distances = np.zeros((n_queries,n_codes),dtype = self.dtype_orig)
         for i in range(self.m):
             distances += distance_table[:,i,self.codes[:,i]]
         return distances
     
-    @numba.njit(fast_math = True)
+    # @numba.njit(fast_math = True)
     def search(self,X: np.ndarray,k: int):
         n_queries = len(X)
         distances_all = self.get_asymmetric_distances(X)
@@ -84,3 +84,5 @@ class quantizer(object):
     
     def getcentroids(self):
         return [estimator.cluster_centers_ for estimator in self.estimators]
+    
+

@@ -80,13 +80,13 @@ class vector_db(object):
         entry_points = sorted_list_by_cosine_similarity(
             entry_points, query_element
         )  # sort entry points by cosine similarity
-        v = entry_points  # visited elements
-        C = entry_points  # candidates
-        W = entry_points  # dynamic list of found nearest neighbors
+        v = entry_points.copy()  # visited elements
+        C = entry_points.copy()  # candidates
+        W = entry_points.copy()  # dynamic list of found nearest neighbors
         # while I have candidates
         while len(C) > 0:
             # extract nearest element from C to q
-            c = entry_points.pop(0)
+            c = C.pop(0)
             # get furthest element from W to q
             f = W[-1]
             # if distance between c and q is greater than distance between f and q then you are done
@@ -95,7 +95,7 @@ class vector_db(object):
             # iterate over friend list of c, where you will update candidates and results accordingly.
             friends = calculate_distances(c[1].friends_list, query_element)
             for e in friends:
-                if e not in v:
+                if e not in v and e.layers >= layer:
                     v.append(e)
                     v.sort(reversed=True)
                     f = W[-1]
@@ -184,7 +184,7 @@ class vector_db(object):
         #     entry_points = []
         for layer in range(l_max, l + 1):
             W = self.search_layer(q, entry_points, 1, layer)
-            print("=========================================================================================\n")
+            print(W," W now ",entry_points," entry points\n")
             entry_points = [W[0]]
 
         # for each layer from l_max to l
