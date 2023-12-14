@@ -26,26 +26,31 @@ nbits = 8
 
 
 class Node(object):
-    def __init__(self, vector: np.ndarray, M: int, layer: int, M_MAX: int,mL: float):
+    def __init__(self, vector: np.ndarray, M: int, layer: int, M_MAX: int, mL: float):
         self.vec = vector
         self.M = M
         self.layer = layer
         self.M_MAX = M_MAX
         self.friends_list: list[Node] = []  # list of Node
-        self.layers =  np.round(float[-math.log(random.uniform(0,1))*mL])
+        self.layers = np.round(float[-math.log(random.uniform(0, 1)) * mL])
+
     # @nm.set(fast_math = True)
     def get_distance_n_similarity(self, vector: np.ndarray):
         return cosine_similarity(self.vec, vector)
+
     def get_neighbors_list(self):
         return self.friends_list
-    
+
+
 def calculate_distances(heap: list, q: np.ndarray):
     heap = [(cosine_similarity(node.vec, q), node) for node in heap]
     return heap
 
 
 # functions for creating a heap that are sorted by cosine similarity between elements and query vector
-def sorted_list_by_cosine_similarity(heap: list, query_vector: np.ndarray) -> list[(int, Node)]:
+def sorted_list_by_cosine_similarity(
+    heap: list, query_vector: np.ndarray
+) -> list[(int, Node)]:
     heap = [(cosine_similarity(node.vec, query_vector), node) for node in heap]
     heap.sort(reverse=True)  # sort descending
     return heap
@@ -71,6 +76,7 @@ class vector_db(object):
 
     ##################### Search Layer #####################
     def search_layer(
+        self,
         query_element: np.ndarray,
         entry_points: list[(int, Node)],
         ef_search: int,
@@ -139,22 +145,22 @@ class vector_db(object):
                 neighbors = e.get_neighbors_list()
                 for neighbor in neighbors:
                     if neighbor not in W:
-                        np.insert(W,Node,neighbor)
+                        np.insert(W, Node, neighbor)
         W_d = list()
-        W = sorted_list_by_cosine_similarity(W,query_element,False)
+        W = sorted_list_by_cosine_similarity(W, query_element, False)
         while len(W) > 0 and len(R) < M:
             e = W.pop(0)
             if e[1].layers >= layer:
                 if len(R) == 0:
-                    np.insert(R,list,e)
+                    np.insert(R, list, e)
                 else:
-                    if e[0] < np.min(R,axis = 0):
-                        np.insert(R,list,e)
+                    if e[0] < np.min(R, axis=0):
+                        np.insert(R, list, e)
                     else:
                         W_d.append(e)
         if keepPrunedConnections:
             while len(W_d) > 0 and len(R) < M:
-                np.insert(R,list,W_d.pop(0))
+                np.insert(R, list, W_d.pop(0))
         return R
 
     def select_neighbors_knn(self, query_element, ef_search, layer):
@@ -205,7 +211,7 @@ class vector_db(object):
             neighbors = self.select_neighbors_simple(q, W, M)
             # add bidirectional connections from neighbors to q at layer
             for neighbor in neighbors:
-                neighbor[1].friends_list.append(q) 
+                neighbor[1].friends_list.append(q)
                 q.friends_list.append(neighbor[1])
             # After adding bidirectional connections, check if the number of connections exceeds Mmax
             for neighbor in neighbors:
@@ -219,10 +225,18 @@ class vector_db(object):
             if l > l_max:
                 self.max_layers = l
                 entry_points = [Node(q, M, layer, Mmax)]
-                
-    
+
     def graph_creation(self):
+        # generate random vectors (To be replaced with the vectors from the dataset)
+        vectors = np.random.normal(size=(10000, dimension))
+        # populate the graph with the vectors
+        for vector in vectors:
+            self.insertion(vector, self.M, self.M_MAX, self.efConstruction, self.ml)
+        print(len(self.graph[self.max_layers]))
+
+    def search(self, query_vector: np.ndarray, ef_search: int):
         pass
 
 
-
+hnsw = vector_db(10, 10, 30)
+hnsw.graph_creation()
