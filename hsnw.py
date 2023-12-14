@@ -1,15 +1,15 @@
 # ==================================================
 # Authors: 1-Omar Badr                             |
-#         2-Karim Hafez                           |
-#         3-Abdulhameed                           |
-#         4-Seif albaghdady                       |
+#         2-Karim Hafez                            |
+#         3-Abdulhameed                            |
+#         4-Seif albaghdady                        |
 # Subject: ADB                                     |
 # Project: HNSW +                                  |
 # ==================================================
-from product_quantization import quantizer
+# from product_quantization import quantizer
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity, cosine_distances
-import threading
+# import threading
 import math
 
 # import numba as nm
@@ -80,18 +80,18 @@ class vector_db(object):
         query_element: np.ndarray,
         entry_points: list[(int, Node)],
         ef_search: int,
-        layer: int,
+        layer: int
     ):
         entry_points = sorted_list_by_cosine_similarity(
             entry_points, query_element
         )  # sort entry points by cosine similarity
-        v = entry_points  # visited elements
-        C = entry_points  # candidates
-        W = entry_points  # dynamic list of found nearest neighbors
+        v = entry_points.copy()  # visited elements
+        C = entry_points.copy()  # candidates
+        W = entry_points.copy()  # dynamic list of found nearest neighbors
         # while I have candidates
         while len(C) > 0:
             # extract nearest element from C to q
-            c = entry_points.pop(0)
+            c = C.pop(0)
             # get furthest element from W to q
             f = W[-1]
             # if distance between c and q is greater than distance between f and q then you are done
@@ -100,7 +100,7 @@ class vector_db(object):
             # iterate over friend list of c, where you will update candidates and results accordingly.
             friends = calculate_distances(c[1].friends_list, query_element)
             for e in friends:
-                if e not in v:
+                if e not in v and e.layers >= layer:
                     v.append(e)
                     v.sort(reversed=True)
                     f = W[-1]
@@ -187,9 +187,9 @@ class vector_db(object):
         #     self.max_layers = l
         #     l_max = l
         #     entry_points = []
-        # else:
         for layer in range(l_max, l + 1):
             W = self.search_layer(q, entry_points, 1, layer)
+            print(W," W now ",entry_points," entry points\n")
             entry_points = [W[0]]
 
         # for each layer from l_max to l
@@ -227,16 +227,14 @@ class vector_db(object):
                 entry_points = [Node(q, M, layer, Mmax)]
 
     def graph_creation(self):
-        # generate random vectors (To be replaced with the vectors from the dataset)
-        vectors = np.random.normal(size=(10000, dimension))
-        # populate the graph with the vectors
+        vectors = np.random.normal(size=(100,dimension))
+        x = 0
         for vector in vectors:
-            self.insertion(vector, self.M, self.M_MAX, self.efConstruction, self.ml)
+            print(f"inserted{x}")
+            self.insertion(vector,self.M,self.M_MAX,self.efConstruction,self.ml)
+            x += 1
         print(len(self.graph[self.max_layers]))
 
-    def search(self, query_vector: np.ndarray, ef_search: int):
-        pass
 
-
-hnsw = vector_db(10, 10, 30)
+hnsw = vector_db(10,10,10)
 hnsw.graph_creation()
