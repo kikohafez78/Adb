@@ -69,9 +69,9 @@ class vector_db(object):
         self.M_MAX = 2 * M  # just a heuristic (based on the paper)
         self.efSearch = efSearch
         self.efConstruction = efConstruction
-        self.entry_points = []
+        self.entry_points = None
         self.max_layers = 0
-        self.ml = 1.0 / math.log(M)
+        self.ml = 1.0 / math.log2(M)  # the closer to 1/ln(M) the better
         self.graph: list[list[Node]] = np.array([[]], dtype=Node)
 
     ##################### Search Layer #####################
