@@ -7,22 +7,25 @@
 # Project: HNSW +                                  |
 # ==================================================
 # from product_quantization import quantizer
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity, cosine_distances
 # import threading
 import math
 
 # import numba as nm
 import random
-from heapq import *
+from heapq import heappop, heappush
+
+import numpy as np
+from sklearn.metrics.pairwise import cosine_distances, cosine_similarity
 
 dimension = 70
 segments = 14
 nbits = 8
-
-# random number generator
-# I = float[-ln(uniform(0,1))*mL] mL is better selected as a non-zero element
-# The authors of the paper propose choosing the optimal value of mL which is equal to 1 / ln(M). This value corresponds to the parameter p = 1 / M of the skip list being an average single element overlap between the layers.
+"""
+random number generator
+I = float[-ln(uniform(0,1))*mL] mL is better selected as a non-zero element
+The authors of the paper propose choosing the optimal value of mL which is equal to 1 / ln(M). 
+This value corresponds to the parameter p = 1 / M of the skip list being an average single element overlap between the layers.
+"""
 
 
 class Node(object):
@@ -48,23 +51,30 @@ def calculate_distances(heap: list, q: np.ndarray):
 
 
 # functions for creating a heap that are sorted by cosine similarity between elements and query vector
-def sorted_list_by_cosine_similarity(
-    heap: list, query_vector: np.ndarray
-) -> list[(int, Node)]:
+def sorted_list_by_cosine_similarity(heap: list, query_vector: np.ndarray) -> list[(int, Node)]:
     heap = [(cosine_similarity(node.vec, query_vector), node) for node in heap]
     heap.sort(reverse=True)  # sort descending
     return heap
 
 
-# good values for M lie between 5 and 48, High M is better for high dimensionality and recall -> dim = 70 therefore M must be High
-# Higher values of efConstruction imply a more profound search as more candidates are explored. However, it requires more computations. Authors recommend choosing such an efConstruction value that results at recall being close to 0.95–1 during training.
-# M_MAX must be close to 2*M
-# heuristic of selecting M out of efConstruction is both closest Nodes and connectivity of th graph by considering the connectivity distances between the candidates
+"""
+- good values for M lie between 5 and 48, High M is better for high dimensionality and recall -> dim = 70 therefore M must be High
+- Higher values of efConstruction imply a more profound search as more candidates are explored. However, it requires more
+  computations.
+  Authors recommend choosing such an efConstruction value that results at recall being close to 0.95–1 during training.
+- M_MAX must be close to 2*M
+- heuristic of selecting M out of efConstruction is both closest Nodes and connectivity of th graph by considering the 
+  connectivity distances between the candidates
+"""
+
+
 class vector_db(object):
-    def __init__(
-        self, M: int, efSearch: int, efConstruction
-    ):  # M is max number of links per node, M_MAX is max number of links connected to the node, efSearch is number of threads or number of nearest neighbors to use to find closest query result
-        # ml 0-1 is the overlap between layers (recommended 1/ln(M)
+    def __init__(self, M: int, efSearch: int, efConstruction):
+        """
+        M is max number of links per node, M_MAX is max number of links connected to the node, efSearch is number of threads or
+        number of nearest neighbors to use to find closest query result
+        ml 0-1 is the overlap between layers (recommended 1/ln(M)
+        """
         self.M = M
         self.M_MAX = 2 * M  # just a heuristic (based on the paper)
         self.efSearch = efSearch
@@ -74,13 +84,12 @@ class vector_db(object):
         self.ml = 1.0 / math.log2(M)  # the closer to 1/ln(M) the better
         self.graph: list[list[Node]] = np.array([[]], dtype=Node)
 
-    ##################### Search Layer #####################
     def search_layer(
         self,
         query_element: np.ndarray,
         entry_points: list[(int, Node)],
         ef_search: int,
-        layer: int
+        layer: int,
     ):
         entry_points = sorted_list_by_cosine_similarity(
             entry_points, query_element
@@ -113,20 +122,17 @@ class vector_db(object):
                             W.pop()
         return W  # return the list of nearest neighbors
 
-    ################# Select Nearest Neighbors #####################
-    def select_neighbors_simple(
-        self, query_element: np.ndarray, C: list[(int, Node)], M: int
-    ) -> list[(int, Node)]:
+    def select_neighbors_simple(self, query_element: np.ndarray, C: list[(int, Node)], M: int) -> list[(int, Node)]:
         size = len(C) if len(C) <= M else M
         return sorted_list_by_cosine_similarity(C, query_element)[0:size]
 
     """
-    SELECT-NEIGHBORS-HEURISTIC(q, C, M, lc, extendCandidates, keepPrunedConnections)
+    SELECT-NEIGHBORS-HEURISTIC(q, C, M, lc, extendCandidates,
+      keepPrunedConnections)
         Input: base element q, candidate elements C, number of neighbors to
         return M, layer number lc, flag indicating whether or not to extend
         candidate list extendCandidates, flag indicating whether or not to add
         discarded elements keepPrunedConnections
-              
     """
 
     def select_neighbors_heuristic(
@@ -166,14 +172,12 @@ class vector_db(object):
     def select_neighbors_knn(self, query_element, ef_search, layer):
         pass
 
-    ##################### Insertion #####################
-
     """
     INSERT(hnsw, q, M, Mmax, efConstruction, mL)
         Input: multilayer graph hnsw, new element q, number of established
         connections M, maximum number of connections for each element
-        per layer Mmax, size of the dynamic candidate list efConstruction, normalization factor for level generation mL
-        
+        per layer Mmax, size of the dynamic candidate list efConstruction,
+        normalization factor for level generation mL
     """
 
     def insertion(self, q: np.ndarray, M: int, Mmax: int, efConstruction: int, mL: int):
@@ -189,7 +193,7 @@ class vector_db(object):
         #     entry_points = []
         for layer in range(l_max, l + 1):
             W = self.search_layer(q, entry_points, 1, layer)
-            print(W," W now ",entry_points," entry points\n")
+            print(W, " W now ", entry_points, " entry points\n")
             entry_points = [W[0]]
 
         # for each layer from l_max to l
@@ -217,9 +221,7 @@ class vector_db(object):
             for neighbor in neighbors:
                 if len(neighbor[1].friends_list) > Mmax:
                     # select Mmax nearest neighbors from neighbor
-                    candidates = self.select_neighbors_simple(
-                        neighbor[1].vec, neighbor[1].friends_list, Mmax
-                    )
+                    candidates = self.select_neighbors_simple(neighbor[1].vec, neighbor[1].friends_list, Mmax)
                     neighbor[1].friends_list = candidates
             entry_points = neighbors
             if l > l_max:
@@ -227,14 +229,14 @@ class vector_db(object):
                 entry_points = [Node(q, M, layer, Mmax)]
 
     def graph_creation(self):
-        vectors = np.random.normal(size=(100,dimension))
+        vectors = np.random.normal(size=(100, dimension))
         x = 0
         for vector in vectors:
             print(f"inserted{x}")
-            self.insertion(vector,self.M,self.M_MAX,self.efConstruction,self.ml)
+            self.insertion(vector, self.M, self.M_MAX, self.efConstruction, self.ml)
             x += 1
         print(len(self.graph[self.max_layers]))
 
 
-hnsw = vector_db(10,10,10)
+hnsw = vector_db(10, 10, 10)
 hnsw.graph_creation()
