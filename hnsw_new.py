@@ -1,5 +1,6 @@
 import math
 import random
+from heapq import heapify, heappop, heappush, heappushpop
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -44,7 +45,8 @@ class HNSW(object):
         self.entry_points = None
         self.max_layers = 0
         self.ml = 1.0 / math.log2(M)  # the closer to 1/ln(M) the better
-        self.graph: list[list[dict]] = []  # graph[layer][node_id] = {neighbor: distance}
+        self.graph: list[list[dict[int, int]]] = []  # graph[layer][node_id] = {neighbor: distance}
+        self.data = np.ndarray([])  # data[node_id] = vector
 
     """
       1- heapify the entry points so that you have the largest cosine similarity at the top (heap[0])
@@ -61,12 +63,35 @@ class HNSW(object):
     def search_layer(
         self,
         query_element: np.ndarray,
-        entry_points: (int, int),
+        entry_points: list[(int, int)],  # list of tuples (cosine_similarity, node_id)
         ef_search: int,
         layer: int,
     ):
-        candidates = entry_points
-        visited = set([])
+        level = self.graph[layer]
+        data = self.data
+        M = self.M
+        visited = set([point for _, point in entry_points])
+        candidates = [(-similarity, point) for similarity, point in entry_points]
+        # create max heap of candidates
+        heapify(candidates)
+
+        while candidates:
+            similarity, point = heappop(candidates)  # most similar node
+            ref = -entry_points[0][0]  # Most similar node in the heap
+            neighbors = [neighbor for neighbor in level[point] if neighbor not in visited]
+            similarities = calculate_distances([data[neighbor] for neighbor in neighbors], query_element)
+            visited.update(neighbors)
+
+            for neighbor, similarity in zip(neighbors, similarities):
+                if len(entry_points) < ef_search:
+                    heappush(entry_points, (-similarity, neighbor))
+                    heappush(candidates, (-similarity, neighbor))
+                    ref = entry_points[0][0]
+                else:
+                    if similarity > ref:
+                        heappushpop(entry_points, (-similarity, neighbor))
+                        heappushpop(candidates, (-similarity, neighbor))
+                        ref = entry_points[0][0]                   
 
     """
       This is similar to search_layer but with ef=1, The idea is to find the closest neighbor in the graph layer

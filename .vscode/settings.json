@@ -5,7 +5,7 @@
   "flake8.args": [
     "--max-line-length",
     "130",
-    "--ignore=E402,F401,W291,E203,E741,F841",
+    "--ignore=E402,F401,W291,E203,E741,F841,F403",
   ],
   "black-formatter.args": [
     "--line-length",
