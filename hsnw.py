@@ -1,20 +1,22 @@
 # ==================================================
 # Authors: 1-Omar Badr                             |
-#         2-Karim Hafez                            |
-#         3-Abdulhameed                            |
-#         4-Seif albaghdady                        |
+#          2-Karim Hafez                            |
+#          3-Abdulhameed                            |
+#          4-Seif albaghdady                        |
 # Subject: ADB                                     |
 # Project: HNSW +                                  |
 # ==================================================
 # from product_quantization import quantizer
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity, cosine_distances
+
 # import threading
 import math
 
 # import numba as nm
 import random
 from heapq import *
+import IVF as ivf
 
 dimension = 70
 segments = 14
@@ -80,7 +82,7 @@ class vector_db(object):
         query_element: np.ndarray,
         entry_points: list[(int, Node)],
         ef_search: int,
-        layer: int
+        layer: int,
     ):
         entry_points = sorted_list_by_cosine_similarity(
             entry_points, query_element
@@ -189,7 +191,7 @@ class vector_db(object):
         #     entry_points = []
         for layer in range(l_max, l + 1):
             W = self.search_layer(q, entry_points, 1, layer)
-            print(W," W now ",entry_points," entry points\n")
+            print(W, " W now ", entry_points, " entry points\n")
             entry_points = [W[0]]
 
         # for each layer from l_max to l
@@ -227,14 +229,42 @@ class vector_db(object):
                 entry_points = [Node(q, M, layer, Mmax)]
 
     def graph_creation(self):
-        vectors = np.random.normal(size=(100,dimension))
+        vectors = np.random.normal(size=(100, dimension))
         x = 0
         for vector in vectors:
             print(f"inserted{x}")
-            self.insertion(vector,self.M,self.M_MAX,self.efConstruction,self.ml)
+            self.insertion(vector, self.M, self.M_MAX, self.efConstruction, self.ml)
             x += 1
         print(len(self.graph[self.max_layers]))
 
 
-hnsw = vector_db(10,10,10)
+# hnsw = vector_db(10, 10, 10)
+# hnsw.graph_creation()
+
+# read data from file saved_db.csv
+
+
+#############################################################################
+
+
+def read_data():
+    data = np.genfromtxt("saved_db.csv", delimiter=",")
+    return data
+
+
+data = read_data()
+
+
+Iv = ivf.IVFile(4096, data)
+
+centroids = Iv.clustering()
+
+# give centroids to hnsw then use get_closest_k_neighbors to get the closest k neighbors
+hnsw = vector_db(10, 10, 10)
+
 hnsw.graph_creation()
+
+# loop over centroids
+
+for centroid in centroids:
+    hnsw.get_closest_k_neighbors(centroid, 10)
