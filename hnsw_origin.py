@@ -90,7 +90,7 @@ class HNSW(object):
             layer0 = graphs[0]
             for layer in reversed(graphs[:level]):
                 # if level of vector > highest level in HNSW, list will be full and we will loop on all levels
-                level_m = m if layer is not layer0 else self._m0
+                level_m = m if layer is not layer0 else self._m0 
                 # navigate the graph and update ep with the closest
                 # nodes we find
                 ep = self._search_graph(elem, ep, layer, ef)

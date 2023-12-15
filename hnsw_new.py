@@ -43,7 +43,7 @@ class HNSW(object):
         self.efSearch = efSearch
         self.efConstruction = efConstruction
         self.entry_points = None
-        self.max_layers = 0
+        self.max_layers = -1
         self.ml = 1.0 / math.log2(M)  # the closer to 1/ln(M) the better
         self.graph: list[dict[int : [dict[int, int]]]] = []  # graph[layer]{indx: {neighbor: distance}}
         self.data = np.ndarray([])  # data[node_id] = vector
@@ -64,12 +64,11 @@ class HNSW(object):
         self,
         query_element: np.ndarray,
         entry_points: list[(int, int)],  # list of tuples (cosine_similarity, node_id)
-        ef_search: int,
+        ef: int,  # in construction phase(insert), ef = ef_construction, in search phase, ef_search = ef_search
         layer: int,
     ):
         level = self.graph[layer]
         data = self.data
-        M = self.M
         visited = set([point for _, point in entry_points])
         candidates = [(-similarity, point) for similarity, point in entry_points]
         # create max heap of candidates
@@ -85,7 +84,7 @@ class HNSW(object):
             visited.update(neighbors)
 
             for neighbor, similarity in zip(neighbors, similarities):
-                if len(entry_points) < ef_search:
+                if len(entry_points) < ef:
                     heappush(entry_points, (similarity, neighbor))
                     heappush(candidates, (-similarity, neighbor))
                     ref = -entry_points[0][0]
@@ -153,7 +152,7 @@ class HNSW(object):
       6- Now we will go through all friends and add us to their friend list (bidirectional)
     """
 
-    def select_neighbors_simple(self, to_be_inserted: (int, int), C: list[(int, int)], M: int, layer: int) -> list[(int, int)]:
+    def select_neighbors_simple(self, to_be_inserted: (int, int), C: list[(int, int)], M: int, layer: int):
         C = nlargest(C, M)
         sim, index = to_be_inserted
         d = self.graph[layer][index]
