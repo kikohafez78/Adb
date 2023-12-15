@@ -55,7 +55,7 @@ class HNSW(object):
         self.heuristic = heuristic
         self.ml = 1.0 / math.log2(M)  # the closer to 1/ln(M) the better
         self.graph: list[dict[int : [dict[int, int]]]] = []  # graph[layer]{indx: {neighbor: distance}}
-        self.data = np.ndarray([])# data[node_id] = vector
+        self.data = []# data[node_id] = vector
         self.vectors = None
         if vectors is None or partitions == 0 or not useIVF:
             self.IVF = None
@@ -241,7 +241,7 @@ class HNSW(object):
         pass
 
     def get_node_layers(self):
-        return np.round(-float[math.log(random.uniform(0, 1))] * self.ml)
+        return np.round(-float(math.log(random.uniform(0, 1))) * self.ml)
 
     """
       1- insert the vector in the data array and assign it an index 
@@ -259,14 +259,12 @@ class HNSW(object):
 
     def insert(self, element: np.ndarray):
         id = len(self.data)
-        np.insert(self.data,np.ndarray,element)
-        L = self.get_node_layers()
-        if self.entry_points  is not None:
-            # if L > self.max_layers:
-            #     for i in range(L - self.max_layers):
-            #         self.graph.append({id:{}})
-            #     self.entry_points = id
-            distance = cosine_similarity(element,self.entry_points)
+        self.data.append(element)
+        L = int(self.get_node_layers())
+        P = self.entry_points
+        if self.entry_points !=  None:
+            e1,e2 = element,self.data[self.entry_points]
+            distance = cosine_similarity(e1.reshape(1,-1),e2.reshape(1,-1))
             EP = [(distance,self.entry_points)]
             for layer in reversed(self.graph[L:]):
                 W = self.search_layer_ef1(element,self.entry_points,distance,layer)
@@ -334,7 +332,7 @@ class HNSW(object):
             self.vectors = None
             
         
-dataset = np.random.normal(size=(10000,70))
+dataset = np.random.normal(size=(10000,10))
 hnsw = HNSW(10,10,10,False,5,6,dataset)
 hnsw.graph_creation()
         
