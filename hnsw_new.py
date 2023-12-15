@@ -39,11 +39,12 @@ class HNSW(object):
     def __init__(self, M: int, efSearch: int, efConstruction: int, heuristic=False, M0: int = None) -> None:
         self.M = M
         self.M_MAX = 2 * M  # just a heuristic (based on the paper)
-        self.M0 = M0 if M0 is not None else 2 * M
+        self.M0 = np.ceil(np.log2(M0)) if M0 is not None else 2 * M
         self.efSearch = efSearch
         self.efConstruction = efConstruction
         self.entry_points = None
         self.max_layers = -1
+        self.heuristic = heuristic
         self.ml = 1.0 / math.log2(M)  # the closer to 1/ln(M) the better
         self.graph: list[dict[int : [dict[int, int]]]] = []  # graph[layer]{indx: {neighbor: distance}}
         self.data = np.ndarray([])  # data[node_id] = vector
@@ -152,18 +153,22 @@ class HNSW(object):
       6- Now we will go through all friends and add us to their friend list (bidirectional)
     """
 
-    def select_neighbors_simple(self, to_be_inserted: (int, int), C: list[(int, int)], M: int, layer: int):
+    def select_neighbors_simple(self, to_be_inserted: int, C: list[(int, int)], M: int, layer: int):
         C = nlargest(C, M)
-        sim, index = to_be_inserted
+        index = to_be_inserted
         d = self.graph[layer][index]
         remaining = M - len(d)
-        d.update(C[:remaining])  # add the remaining friends to the friend list
+        # d.update(to_be_inserted,C[:remaining])  # add the remaining friends to the friend list
+        for sim,idx in C[:remaining]:
+            d[idx] = sim
         if remaining > 0:
             # check the furthest friends in the friend list and check if you can replace them with remaining M largest
             for i in range(remaining, len(C)):
-                if C[i][0] > min(d):
+                if C[i][0] > min(d,key= d.get):
+                    
                     d.pop(min(d, key=d.get))
-                    d.update(C[i])
+                    # d.update(to_be_inserted,C[i])
+                    d[C[i][1]] = C[i][0]
         # Now we will go through all friends and add us to their friend list (bidirectional)
         for i in d:
             self.graph[layer][i].update(index)
@@ -171,11 +176,11 @@ class HNSW(object):
     def select_neighbors_heuristic(
         self,
         query_element: np.ndarray,
-        C: list[(int, Node)],
+        C: list[(int, int)],
         M: int,
         layer: int,
         extendCandidates=False,
-        keepPrunedConnections=False,
+        keepPrunedConnections=False
     ):
         R = np.ndarray([])
         W = np.copy(C[:][1])
@@ -204,7 +209,8 @@ class HNSW(object):
 
     def select_neighbors_knn(self, query_element, ef_search, layer):
         pass
-
+    def get_node_layers(self):
+        return np.round(-float[math.log(random.uniform(0,1))] * self.ml)
     """
       1- insert the vector in the data array and assign it an index 
       2- if the HNSW is empty, or if the L is higher the highest level in the HNSW, then we create (L - len(graphs)) levels with 
@@ -220,4 +226,31 @@ class HNSW(object):
     """
 
     def insert(self, element: np.ndarray):
-        pass
+        id = len(self.data)
+        np.insert(self.data,np.ndarray,element)
+        L = self.get_node_layers()
+        if self.entry_points  is not None:
+            if L > self.max_layers:
+                for i in range(L - self.max_layers):
+                    self.graph.append({id:{}})
+                self.entry_points = id
+            distance = cosine_similarity(element,self.entry_points)
+            P = [(distance,self.entry_points)]
+            for layer in reversed(self.graph[L:]):
+                W = self.search_layer_ef1(element,self.entry_points,distance,layer)
+                P.append(W)
+            for layer,nodes in enumerate(reversed(self.graph[:L])):
+                W = self.search_layer(element,[(W[0],W[1])],self.efConstruction,layer)
+                M = self.M_MAX if layer == 0 else self.M0
+                self.graph[layer][id] = {}
+                if not self.heuristic:
+                    self.select_neighbors_simple(id,W,M,layer)
+                else:
+                    self.select_neighbors_heuristic(id,W,M,layer)
+                self.entry_points = W
+        else:
+            for i in range(self.max_layers,L):
+                self.graph.append({id:{}})
+            self.entry_points = id
+            self.max_layers = L
+            
