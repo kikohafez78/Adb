@@ -173,8 +173,21 @@ class HNSW(object):
         for i in d:
             self.graph[layer][i][index] = d[i]  # d[i] is the distance between us
 
-    def search(self, query_element: np.ndarray, ef: int, layer: int, k: int):
-        pass
+    def search(self, query_element: np.ndarray, ef: int = None, k: int = None):
+        graph = self.graph
+        entry_point = self.entry_points
+        if entry_point is None:
+            raise Exception("The graph is empty, please insert some elements first")
+        if ef is None:
+            ef = self.efSearch
+        if k is None:
+            k = self.M
+        sim = cosine_similarity(query_element, self.entry_points)
+        for layer in reversed(graph[1:]):  # loop on the layers till you reach layer 1
+            entry_point, sim = self.search_layer_ef1(query_element, sim, entry_point, layer)
+        candidates = self.search_layer(query_element, [(-sim, entry_point)], ef, 0)
+        candidates = nlargest(k, candidates)
+        return [(-sim, idxs) for sim, idxs in candidates]
 
     def select_neighbors_heuristic(
         self,
