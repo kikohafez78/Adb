@@ -90,7 +90,7 @@ class HNSW(object):
             layer0 = graphs[0]
             for layer in reversed(graphs[:level]):
                 # if level of vector > highest level in HNSW, list will be full and we will loop on all levels
-                level_m = m if layer is not layer0 else self._m0 
+                level_m = m if layer is not layer0 else self._m0
                 # navigate the graph and update ep with the closest
                 # nodes we find
                 ep = self._search_graph(elem, ep, layer, ef)
@@ -296,7 +296,7 @@ class HNSW(object):
 
         assert not any(idx in d for _, idx in to_insert)
         to_insert = nlargest(m, to_insert)  # smallest m distances
-        unchecked = m - len(d) 
+        unchecked = m - len(d)
         assert 0 <= unchecked <= m
         to_insert, checked_ins = to_insert[:unchecked], to_insert[unchecked:]
         to_check = len(checked_ins)
@@ -313,6 +313,10 @@ class HNSW(object):
             del d[idx_old]
             d[idx_new] = -md_new
             assert len(d) == m
+
+    """
+    
+    """
 
     def _select_heuristic(self, d, to_insert, m, g, heap=False):
         nb_dicts = [g[idx] for idx in d]
