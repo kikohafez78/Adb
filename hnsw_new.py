@@ -154,7 +154,8 @@ class HNSW(object):
     """
 
     def select_neighbors_simple(self, to_be_inserted: int, C: list[(int, int)], M: int, layer: int):
-        C = nlargest(C, M)
+        C = nlargest(M, C)
+        C = [(sim, idx) for sim, idx in C if len(self.graph[layer][idx]) < self.M]  # check if the node have place in friend list
         index = to_be_inserted
         d = self.graph[layer][index]
         remaining = M - len(d)
@@ -168,9 +169,9 @@ class HNSW(object):
                     d.pop(min(d, key=d.get))
                     # d.update(to_be_inserted,C[i])
                     d[C[i][1]] = C[i][0]
-        # Now we will go through all friends and add us to their friend list (bidirectional)
+        # Now we will go through all friends and add us to their friend list and the distance between us (bidirectional)
         for i in d:
-            self.graph[layer][i].update(index)
+            self.graph[layer][i][index] = d[i]  # d[i] is the distance between us
 
     def search(self, query_element: np.ndarray, ef: int, layer: int, k: int):
         pass
