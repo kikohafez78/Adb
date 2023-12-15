@@ -69,20 +69,72 @@ class IVFile(object):
         )
         indices = sort_vectors_by_cosine_similarity(closest, vector)
         return [closest[i] for i in indices[0][len(closest) - K - 1 :]]
+    def get_K_closest_neighbors_given_centroids(self, centroids: np.ndarray, vector: np.ndarray, K: int):
+        closest = []
+        for centroid in centroids:
+            closest.append(self.get_cluster_data(centroid, vector, K))
+        closest = np.asarray(closest)
+        closest = closest.reshape(
+            (closest.shape[0] * closest.shape[1], closest.shape[2])
+        )
+        indices = sort_vectors_by_cosine_similarity(closest, vector)
+        return [closest[i] for i in indices[0][len(closest) - K - 1 :]]
+    def get_K_closest_neigbors_inside_centroid_space(self, centroids: np.ndarray, vector: np.ndarray, K: int):
+        centroids = self.get_closest_centroids(vector, 1)
+        closest = []
+        for centroid in centroids:
+            closest.append(self.get_cluster_data(centroid, vector, K))
+        closest = np.asarray(closest)
+        closest = closest.reshape(
+            (closest.shape[0] * closest.shape[1], closest.shape[2])
+        )
+        indices = sort_vectors_by_cosine_similarity(closest, vector)
+        return [closest[i] for i in indices[0][len(closest) - K - 1 :]]
 
 
-K = 3
-num_partions = 16
-dataset = np.random.normal(size=(1000, 3))
-Iv = IVFile(num_partions, dataset)
-a = Iv.clustering()
-test_vector = np.random.normal(size=(1, 3))
-# ===========================================================================
-print("test-vector:", test_vector)
-# ===========================================================================
-print("centroid to file: ", a, "\n")
-# ===========================================================================
-# print(Iv.get_closest_centroids(test_vector,K),"\n",cosine_similarity(Iv.get_closest_centroids(test_vector,K),test_vector))
-# ===========================================================================
-closest = Iv.get_closest_k_neighbors(test_vector, K)
-print(f"{K} closest vectors are: ", closest, cosine_similarity(closest, test_vector))
+# K = 3
+# num_partions = 16
+# dataset = np.random.normal(size=(1000, 3))
+# Iv = IVFile(num_partions, dataset)
+# a = Iv.clustering()
+# test_vector = np.random.normal(size=(1, 3))
+# # ===========================================================================
+# print("test-vector:", test_vector)
+# # ===========================================================================
+# print("centroid to file: ", a, "\n")
+# # ===========================================================================
+# # print(Iv.get_closest_centroids(test_vector,K),"\n",cosine_similarity(Iv.get_closest_centroids(test_vector,K),test_vector))
+# # ===========================================================================
+# closest = Iv.get_closest_k_neighbors(test_vector, K)
+# print(f"{K} closest vectors are: ", closest, cosine_similarity(closest, test_vector))
+# K = 3
+# num_partions = 16
+# dataset = np.random.normal(size=(1000, 3))
+# Iv = IVFile(num_partions, dataset)
+# a = Iv.clustering()
+# test_vector = np.random.normal(size=(1, 3))
+# # ===========================================================================
+# print("test-vector:", test_vector)
+# # ===========================================================================
+# print("centroid to file: ", a, "\n")
+# # ===========================================================================
+# # print(Iv.get_closest_centroids(test_vector,K),"\n",cosine_similarity(Iv.get_closest_centroids(test_vector,K),test_vector))
+# # ===========================================================================
+# closest = Iv.get_closest_k_neighbors(test_vector, K)
+# print(f"{K} closest vectors are: ", closest, cosine_similarity(closest, test_vector))
+
+# K = 3
+# num_partions = 16
+# dataset = np.random.normal(size=(1000, 3))
+# Iv = IVFile(num_partions, dataset)
+# a = Iv.clustering()
+# test_vector = np.random.normal(size=(1, 3))
+# # ===========================================================================
+# print("test-vector:", test_vector)
+# # ===========================================================================
+# print("centroid to file: ", a, "\n")
+# # ===========================================================================
+# # print(Iv.get_closest_centroids(test_vector,K),"\n",cosine_similarity(Iv.get_closest_centroids(test_vector,K),test_vector))
+# # ===========================================================================
+# closest = Iv.get_closest_k_neighbors(test_vector, K)
+# print(f"{K} closest vectors are: ", closest, cosine_similarity(closest, test_vector))
