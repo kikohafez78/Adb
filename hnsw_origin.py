@@ -296,7 +296,7 @@ class HNSW(object):
 
         assert not any(idx in d for _, idx in to_insert)
         to_insert = nlargest(m, to_insert)  # smallest m distances
-        unchecked = m - len(d)
+        unchecked = m - len(d) 
         assert 0 <= unchecked <= m
         to_insert, checked_ins = to_insert[:unchecked], to_insert[unchecked:]
         to_check = len(checked_ins)

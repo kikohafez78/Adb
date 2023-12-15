@@ -168,6 +168,9 @@ class HNSW(object):
         for i in d:
             self.graph[layer][i].update(index)
 
+    def search(self, query_element: np.ndarray, ef: int, layer: int, k: int):
+        
+
     def select_neighbors_heuristic(
         self,
         query_element: np.ndarray,
