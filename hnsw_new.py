@@ -71,14 +71,14 @@ class HNSW(object):
         level = self.graph[layer]
         data = self.data
         visited = set([point for _, point in entry_points])
-        candidates = [(-similarity, point) for similarity, point in entry_points]
-        # create max heap of candidates
+        candidates = [(similarity, point) for similarity, point in entry_points]
+        # create min heap, so that the lowest cosine similarity is at the top
         heapify(candidates)
 
         while candidates:
             currrent_similarity, point = heappop(candidates)  # most similar node
-            ref = -entry_points[0][0]  # Most similar node in the heap
-            if currrent_similarity < ref:  # if the similarity is lower than the most similar node in the heap
+            ref = entry_points[0][0]
+            if currrent_similarity < ref:  # if new similarities are lower than the least similar node in the heap, we stop
                 break
             neighbors = [neighbor for neighbor in level[point] if neighbor not in visited]
             similarities = calculate_distances([data[neighbor] for neighbor in neighbors], query_element)
@@ -87,13 +87,13 @@ class HNSW(object):
             for neighbor, similarity in zip(neighbors, similarities):
                 if len(entry_points) < ef:
                     heappush(entry_points, (similarity, neighbor))
-                    heappush(candidates, (-similarity, neighbor))
-                    ref = -entry_points[0][0]
+                    heappush(candidates, (similarity, neighbor))
+                    ref = entry_points[0][0]
                 else:
                     if similarity > ref:
-                        heappushpop(entry_points, (-similarity, neighbor))  # replace the lowest similarity with the new one
-                        heappush(candidates, (-similarity, neighbor))
-                        ref = -entry_points[0][0]
+                        heappushpop(entry_points, (similarity, neighbor))  # replace the lowest similarity with the new one
+                        heappush(candidates, (similarity, neighbor))
+                        ref = entry_points[0][0]
         return entry_points
 
     """
@@ -185,9 +185,9 @@ class HNSW(object):
         sim = cosine_similarity(query_element, self.entry_points)
         for layer in reversed(graph[1:]):  # loop on the layers till you reach layer 1
             entry_point, sim = self.search_layer_ef1(query_element, sim, entry_point, layer)
-        candidates = self.search_layer(query_element, [(-sim, entry_point)], ef, 0)
+        candidates = self.search_layer(query_element, [(sim, entry_point)], ef, 0)
         candidates = nlargest(k, candidates)
-        return [(-sim, idxs) for sim, idxs in candidates]
+        return [(sim, idxs) for sim, idxs in candidates]
 
     def select_neighbors_heuristic(
         self,
