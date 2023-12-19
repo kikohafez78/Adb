@@ -14,7 +14,7 @@ def read_data_from_csv(file_path):
 # Main script
 if __name__ == "__main__":
     # Specify the file path to your CSV file
-    csv_file_path = "saved_db.csv"
+    csv_file_path = "./"
 
     # Read data from CSV
     dataset = read_data_from_csv(csv_file_path)

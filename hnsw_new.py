@@ -12,7 +12,9 @@ from heapq import heapify, heappop, heappush, heappushpop, heapreplace, nlargest
 from IVF import IVFile
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-from operator  import itemgetter
+from operator import itemgetter
+
+
 # from product_quantization import quantizer
 class Node(object):
     def __init__(self, vector: np.ndarray, M: int):
@@ -37,14 +39,24 @@ def calculate_distances(heap: list, q: np.ndarray):
 
 
 # functions for creating a heap that are sorted by cosine similarity between elements and query vector
-def sorted_list_by_cosine_similarity(heap: list, query_vector: np.ndarray) -> list[(int, Node)]:
+def sorted_list_by_cosine_similarity(heap: list, query_vector: np.ndarray) -> list[(int, int)]:
     heap = [(cosine_similarity(node.vec, query_vector), node) for node in heap]
     heap.sort(reverse=True)  # sort descending
     return heap
 
 
 class HNSW(object):
-    def __init__(self, M: int, efSearch: int, efConstruction: int, heuristic=False, M0: int = None,partitions:int = 3,vectors: np.ndarray = None,useIVF:bool = False) -> None:
+    def __init__(
+        self,
+        M: int,
+        efSearch: int,
+        efConstruction: int,
+        heuristic=False,
+        M0: int = None,
+        partitions: int = 3,
+        vectors: np.ndarray = None,
+        useIVF: bool = False,
+    ) -> None:
         self.M = M
         self.M_MAX = 2 * M  # just a heuristic (based on the paper)
         self.M0 = np.ceil(np.log2(M0)) if M0 is not None else 2 * M
@@ -55,13 +67,14 @@ class HNSW(object):
         self.heuristic = heuristic
         self.ml = 1.0 / math.log2(M)  # the closer to 1/ln(M) the better
         self.graph: list[dict[int : [dict[int, int]]]] = []  # graph[layer]{indx: {neighbor: distance}}
-        self.data = []# data[node_id] = vector
+        self.data = []  # data[node_id] = vector
         self.vectors = None
         if vectors is None or partitions == 0 or not useIVF:
             self.IVF = None
             self.vectors = vectors
         else:
-            self.IVF = IVFile(partitions,vectors)
+            self.IVF = IVFile(partitions, vectors)
+
     """
       1- heapify the entry points so that you have the largest cosine similarity at the top (heap[0])
       2- track the nodes you have visited
@@ -89,11 +102,11 @@ class HNSW(object):
         heapify(candidates)
 
         while candidates:
-            currrent_similarity, point = heappop(candidates)  # most similar node
+            currrent_similarity, point = heappop(candidates)
             ref = entry_points[0][0]
             if currrent_similarity < ref:  # if new similarities are lower than the least similar node in the heap, we stop
                 break
-            neighbors = [neighbor for neighbor in level[point] if neighbor not in visited]
+            neighbors = level.get(point, [])
             similarities = calculate_distances([data[neighbor] for neighbor in neighbors], query_element)
             visited.update(neighbors)
 
@@ -125,15 +138,16 @@ class HNSW(object):
       10- return the best and best_dist --> this is a single node unlike search_layer where it returns a heap of nodes.
     """
 
-    def search_layer_ef1(self, q: np.ndarray, dist: int, entry_point: (int, int), layer: int) -> (int, Node):
+    def search_layer_ef1(self, q: np.ndarray, dist: int, entry_point: (int, int), layer: int):
         """
         - equivalent to search_layer(q, entry_points, ef, layer) with ef = 1
         - Mainly we used to traverse the layers of the graph that are bigger than highest layer of query element
         """
         level = self.graph[layer]
+        # print(level,layer)
         data = self.data
         M = self.M
-        visited = set([entry_point[1]])
+        visited = set([entry_point])
         candidates = [entry_point]
         best = entry_point
         best_sim = dist
@@ -141,7 +155,7 @@ class HNSW(object):
             currrent_similarity, point = heappop(candidates)
             if currrent_similarity < best_sim:  # if the similarity is lower than the most similar node in the heap
                 break
-            neighbors = [neighbor for neighbor in level[point] if neighbor not in visited]
+            neighbors = level.get(point, [])
             similarities = calculate_distances([data[neighbor] for neighbor in neighbors], q)
             visited.update(neighbors)
             for neighbor, similarity in zip(neighbors, similarities):
@@ -167,7 +181,7 @@ class HNSW(object):
     """
 
     def select_neighbors_simple(self, to_be_inserted: int, C: list[(int, int)], M: int, layer: int):
-        C = nlargest(M, C)
+        C = nlargest(M, C, key=itemgetter(0))
         C = [(sim, idx) for sim, idx in C if len(self.graph[layer][idx]) < self.M]  # check if the node have place in friend list
         index = to_be_inserted
         d = self.graph[layer][index]
@@ -211,7 +225,7 @@ class HNSW(object):
         extendCandidates=False,
         keepPrunedConnections=False,
     ):
-        sorted(C,key=itemgetter(0),reverse = True)
+        sorted(C, key=itemgetter(0), reverse=True)
         d = self.graph[layer][query_element]
         R = []
         if extendCandidates:
@@ -220,14 +234,14 @@ class HNSW(object):
                     if e in C[:][1] or len(self.data[e]) < M:
                         pass
                     else:
-                        C.append((cosine_similarity(self.data[e.keys()],self.data[query_element]),e.keys()))
-            sorted(C,key=itemgetter(0),reverse = True)
-        W_d= {}
+                        C.append((cosine_similarity(self.data[e.keys()], self.data[query_element]), e.keys()))
+            sorted(C, key=itemgetter(0), reverse=True)
+        W_d = {}
         while len(C) > 0 and len(R) < M:
             e = C.pop(0)
             inserted = True
             for r in R:
-                if e[0] < cosine_similarity(self.data[query_element],self.data[r[1]]):
+                if e[0] < cosine_similarity(self.data[query_element], self.data[r[1]]):
                     pass
                 else:
                     inserted = False
@@ -236,9 +250,6 @@ class HNSW(object):
             if inserted:
                 R.append(e)
         return R
-
-    def select_neighbors_knn(self, query_element, ef_search, layer):
-        pass
 
     def get_node_layers(self):
         return np.round(-float(math.log(random.uniform(0, 1))) * self.ml)
@@ -258,83 +269,80 @@ class HNSW(object):
     """
 
     def insert(self, element: np.ndarray):
-        id = len(self.data)
-        self.data.append(element)
-        L = int(self.get_node_layers())
-        P = self.entry_points
-        if self.entry_points !=  None:
-            e1,e2 = element,self.data[self.entry_points]
-            distance = cosine_similarity(e1.reshape(1,-1),e2.reshape(1,-1))
-            EP = [(distance,self.entry_points)]
-            for layer in reversed(self.graph[L:]):
-                W = self.search_layer_ef1(element,self.entry_points,distance,layer)
-            EP.append(W)
-            for layer,nodes in enumerate(reversed(self.graph[:L])):
-                EP = self.search_layer(element,EP,self.efConstruction,layer)
-                M = self.M_MAX if layer == 0 else self.M0
-                self.graph[layer][id] = {}
-                if not self.heuristic:
-                    self.select_neighbors_simple(id,EP,M,layer)
-                else:
-                    self.select_neighbors_heuristic(id,EP,M,layer)
-                self.entry_points = W
-        
-        for i in range(len(self.graph),L):
-            self.graph.append({id:{}})
-        self.entry_points = id
-        self.max_layers = L
-        
-        
-    def find_closest(self,element,K= 3):
+        # those are just "references" to the class attributes
+        data = self.data
+        graphs = self.graph
+        point = self.entry_points
+        m = self.M
+        level = int(self.get_node_layers()) + 1
+        idx = len(data)
+        data.append(element)
+
+        if point is not None:
+            e1, e2 = np.copy(element), np.copy(data[point])
+            dist = cosine_similarity(e1.reshape(1, -1), e2.reshape(1, -1))[0][0]
+            for layer, plane in enumerate(reversed(graphs[level:])):
+                point, dist = self.search_layer_ef1(element, dist, (dist, point), layer)
+            ep = [(dist, point)]
+            layer0 = graphs[0]
+            for layer, plane in enumerate(reversed(graphs[:level])):
+                M = m if graphs[layer] is not layer0 else self.M0
+                ep = self.search_layer(element, ep, self.efConstruction, layer)
+                plane[idx] = layer_idx = {}
+                # self.select_neighbors_simple(idx,ep,M,layer)
+        for i in range(len(graphs), level):
+            graphs.append({idx: {}})
+            self.entry_points = idx
+        # print(len(self.data),self.data,self.graph)
+
+    def find_closest(self, element, K=3):
         if len(self.graph) == 0 or element is None or K <= 0:
-                return None
+            return None
         if self.IVF is None:
             ep = self.entry_points
-            distance_ep = cosine_similarity(self.data[ep],element)
+            distance_ep = cosine_similarity(self.data[ep], element)
             Graph = self.graph
-            for layer,nodes in enumerate(reversed(Graph)):
+            for layer, nodes in enumerate(reversed(Graph)):
                 if layer > 0:
-                    new_ep,distance = self.search_layer_ef1(element,distance_ep,ep,layer)
+                    new_ep, distance = self.search_layer_ef1(element, distance_ep, ep, layer)
                 else:
-                    ep = self.search_layer(element,[(distance,new_ep)],self.efSearch,layer)
+                    ep = self.search_layer(element, [(distance, new_ep)], self.efSearch, layer)
                     if K > 1:
-                        ep = nlargest(K,ep)
+                        ep = nlargest(K, ep)
                     else:
-                        sorted(ep,reverse=True)
+                        sorted(ep, reverse=True)
                         return ep[0]
             return ep[:K]
         else:
             ep = self.entry_points
-            distance_ep = cosine_similarity(self.data[ep],element)
+            distance_ep = cosine_similarity(self.data[ep], element)
             Graph = self.graph
-            for layer,nodes in enumerate(reversed(Graph)):
+            for layer, nodes in enumerate(reversed(Graph)):
                 if layer > 0:
-                    new_ep,distance = self.search_layer_ef1(element,distance_ep,ep,layer)
+                    new_ep, distance = self.search_layer_ef1(element, distance_ep, ep, layer)
                 else:
-                    ep = self.search_layer(element,[(distance,new_ep)],self.efSearch,layer)
+                    ep = self.search_layer(element, [(distance, new_ep)], self.efSearch, layer)
                     if K > 1:
-                        ep = nlargest(K,ep)
+                        ep = nlargest(K, ep)
                     else:
-                        sorted(ep,reverse=True)
+                        sorted(ep, reverse=True)
                         return self.IVF.get_K_closest_neighbors_given_centroids(self.data[ep[0][1]], element, K)
             return self.IVF.get_K_closest_neighbors_given_centroids(self.data[ep[:K][1]], element, K)
-            
-            
+
     def graph_creation(self):
         if self.IVF is None:
             for vector in self.vectors:
                 self.insert(vector)
+                print(len(self.graph))
             self.vectors = None
         else:
             self.vectors = self.IVF.clustering().keys()
             for vector in self.vectors:
                 self.insert(np.fromstring(vector))
             self.vectors = None
-            
-        
-dataset = np.random.normal(size=(10000,10))
-hnsw = HNSW(10,10,10,False,5,6,dataset)
+
+
+dataset = np.random.normal(size=(10000, 3))
+hnsw = HNSW(10, 10, 10, False, 5, 6, dataset)
 hnsw.graph_creation()
-        
-                         
-            
+print(hnsw.graph)
