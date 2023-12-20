@@ -5,7 +5,7 @@ from sklearn.cluster import  KMeans as km
 from sklearn.metrics.pairwise import cosine_similarity
 import numba
 BITS2DTYPE ={
-    8: np.unit8,
+    8: np.uint8
 }
 class quantizer(object):
 
@@ -34,7 +34,7 @@ class quantizer(object):
         for i in range(self.m):
             estimator  = self.estimators[i]
             X_i = X[:][i*self.ds:(i+1)*self.ds]
-            log.info("fitting KMains")
+            log.info("fitting KMaens")
             estimator.fit(X_i)
         self.is_trained = True
     def encode(self,X: np.ndarray):

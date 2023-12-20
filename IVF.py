@@ -57,7 +57,8 @@ class IVFile(object):
         index = sort_vectors_by_cosine_similarity(data, vector)
         data = data[index]
         return data[0][len(data) - K - 1 :]
-
+    def cluster_data(self, centroids: np.ndarray,K):
+        return [np.load(self.assigments[str(centroid)]) for centroid in centroids]
     def get_closest_k_neighbors(self, vector: np.ndarray, K: int):
         centroids = self.get_closest_centroids(vector, K)
         closest = []
@@ -92,43 +93,41 @@ class IVFile(object):
         return [closest[i] for i in indices[0][len(closest) - K - 1 :]]
 
 
-# K = 3
-# num_partions = 16
-# dataset = np.random.normal(size=(1000, 3))
-# Iv = IVFile(num_partions, dataset)
-# a = Iv.clustering()
-# test_vector = np.random.normal(size=(1, 3))
-# # ===========================================================================
-# print("test-vector:", test_vector)
-# # ===========================================================================
-# print("centroid to file: ", a, "\n")
-# # ===========================================================================
-# # print(Iv.get_closest_centroids(test_vector,K),"\n",cosine_similarity(Iv.get_closest_centroids(test_vector,K),test_vector))
-# # ===========================================================================
-# closest = Iv.get_closest_k_neighbors(test_vector, K)
-# print(f"{K} closest vectors are: ", closest, cosine_similarity(closest, test_vector))
-# K = 3
-# num_partions = 16
-# dataset = np.random.normal(size=(1000, 3))
-# Iv = IVFile(num_partions, dataset)
-# a = Iv.clustering()
-# test_vector = np.random.normal(size=(1, 3))
-# # ===========================================================================
-# print("test-vector:", test_vector)
-# # ===========================================================================
-# print("centroid to file: ", a, "\n")
-# # ===========================================================================
-# # print(Iv.get_closest_centroids(test_vector,K),"\n",cosine_similarity(Iv.get_closest_centroids(test_vector,K),test_vector))
-# # ===========================================================================
-# closest = Iv.get_closest_k_neighbors(test_vector, K)
-# print(f"{K} closest vectors are: ", closest, cosine_similarity(closest, test_vector))
+
+
+class IVFTree(object):
+    def __init__(self, partitions: int,vectors: np.ndarray):
+        self.partitions = partitions
+        self.nlevels = np.floor(np.log2(partitions))
+        self.vectors = vectors
+    def create_tree(self):
+        self.graph: list[IVFile] = []
+        self.assignments: list[list[dict]] = []
+        vectors = self.vectors
+        for i in range(self.nlevels,-1,1):
+            iv = IVFile(i**2,vectors)
+            cluster_assignment = iv.clustering()
+            self.assignments.append(cluster_assignment)
+            vectors = [np.fromstring(cluster) for cluster in cluster_assignment.keys()]
+            self.graph.append(iv)
+    
+    def find(self,vector: np.ndarray, K: int):
+        level0 = self.graph[0]
+        clusters = vector
+        for iv in reversed(self.graph):
+            if iv != level0:
+                clusters = iv.get_closest_k_neighbors(clusters,1)
+            else:
+                clusters = iv.get_K_closest_neighbors_given_centroids(clusters,vector,K)
+        return clusters
+
 
 # K = 3
-# num_partions = 16
-# dataset = np.random.normal(size=(1000, 3))
+# num_partions = 4096
+# dataset = np.random.normal(size=(20000000, 70))
 # Iv = IVFile(num_partions, dataset)
 # a = Iv.clustering()
-# test_vector = np.random.normal(size=(1, 3))
+# test_vector = np.random.normal(size=(1, 70))
 # # ===========================================================================
 # print("test-vector:", test_vector)
 # # ===========================================================================
@@ -138,3 +137,4 @@ class IVFile(object):
 # # ===========================================================================
 # closest = Iv.get_closest_k_neighbors(test_vector, K)
 # print(f"{K} closest vectors are: ", closest, cosine_similarity(closest, test_vector))
+        

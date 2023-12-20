@@ -37,7 +37,7 @@ def calculate_distances(heap: list, q: np.ndarray):
 
 
 # functions for creating a heap that are sorted by cosine similarity between elements and query vector
-def sorted_list_by_cosine_similarity(heap: list, query_vector: np.ndarray) -> list[(int, Node)]:
+def sorted_list_by_cosine_similarity(heap: list, query_vector: np.ndarray) -> list[(int, int)]:
     heap = [(cosine_similarity(node.vec, query_vector), node) for node in heap]
     heap.sort(reverse=True)  # sort descending
     return heap
@@ -89,12 +89,17 @@ class HNSW(object):
         heapify(candidates)
 
         while candidates:
-            currrent_similarity, point = heappop(candidates)  # most similar node
+            currrent_similarity, point = heappop(candidates)
             ref = entry_points[0][0]
             if currrent_similarity < ref:  # if new similarities are lower than the least similar node in the heap, we stop
                 break
-            neighbors = [neighbor for neighbor in level[point] if neighbor not in visited]
-            similarities = calculate_distances([data[neighbor] for neighbor in neighbors], query_element)
+            neighbors = []
+            try:
+                neighbors = list(level.get(point,{}).difference(visited))
+            except:
+                print(f"search layer exception at node {point}\n")
+                neighbors = []
+            similarities = [calculate_distances([data[neighbor] for neighbor in neighbors], query_element)[0] for neighbor in neighbors]
             visited.update(neighbors)
 
             for neighbor, similarity in zip(neighbors, similarities):
@@ -125,25 +130,30 @@ class HNSW(object):
       10- return the best and best_dist --> this is a single node unlike search_layer where it returns a heap of nodes.
     """
 
-    def search_layer_ef1(self, q: np.ndarray, dist: int, entry_point: (int, int), layer: int) -> (int, Node):
+    def search_layer_ef1(self, q: np.ndarray, dist: int, entry_point: (int, int), layer: int):
         """
         - equivalent to search_layer(q, entry_points, ef, layer) with ef = 1
         - Mainly we used to traverse the layers of the graph that are bigger than highest layer of query element
         """
         level = self.graph[layer]
+        #print(level,layer)
         data = self.data
         M = self.M
-        visited = set([entry_point[1]])
+        visited = set([entry_point])
         candidates = [entry_point]
         best = entry_point
         best_sim = dist
         while candidates:
+            print(candidates)
             currrent_similarity, point = heappop(candidates)
             if currrent_similarity < best_sim:  # if the similarity is lower than the most similar node in the heap
                 break
-            neighbors = [neighbor for neighbor in level[point] if neighbor not in visited]
-            similarities = calculate_distances([data[neighbor] for neighbor in neighbors], q)
-            visited.update(neighbors)
+            neighbors = []
+            try:
+                neighbors = list(level.get(point,{}).difference(visited))
+            except:
+                neighbors = []
+            similarities = [calculate_distances([data[neighbor] for neighbor in neighbors], q)[0] for neighbor in neighbors]
             for neighbor, similarity in zip(neighbors, similarities):
                 if similarity > best_sim:
                     best = neighbor
@@ -167,7 +177,7 @@ class HNSW(object):
     """
 
     def select_neighbors_simple(self, to_be_inserted: int, C: list[(int, int)], M: int, layer: int):
-        C = nlargest(M, C)
+        C = nlargest(M, C,key = itemgetter(0))
         C = [(sim, idx) for sim, idx in C if len(self.graph[layer][idx]) < self.M]  # check if the node have place in friend list
         index = to_be_inserted
         d = self.graph[layer][index]
@@ -185,7 +195,7 @@ class HNSW(object):
         # Now we will go through all friends and add us to their friend list and the distance between us (bidirectional)
         for i in d:
             self.graph[layer][i][index] = d[i]  # d[i] is the distance between us
-
+            
     def search(self, query_element: np.ndarray, ef: int = None, k: int = None):
         graph = self.graph
         entry_point = self.entry_points
@@ -237,9 +247,6 @@ class HNSW(object):
                 R.append(e)
         return R
 
-    def select_neighbors_knn(self, query_element, ef_search, layer):
-        pass
-
     def get_node_layers(self):
         return np.round(-float(math.log(random.uniform(0, 1))) * self.ml)
 
@@ -258,31 +265,31 @@ class HNSW(object):
     """
 
     def insert(self, element: np.ndarray):
-        id = len(self.data)
-        self.data.append(element)
-        L = int(self.get_node_layers())
-        P = self.entry_points
-        if self.entry_points !=  None:
-            e1,e2 = element,self.data[self.entry_points]
-            distance = cosine_similarity(e1.reshape(1,-1),e2.reshape(1,-1))
-            EP = [(distance,self.entry_points)]
-            for layer in reversed(self.graph[L:]):
-                W = self.search_layer_ef1(element,self.entry_points,distance,layer)
-            EP.append(W)
-            for layer,nodes in enumerate(reversed(self.graph[:L])):
-                EP = self.search_layer(element,EP,self.efConstruction,layer)
-                M = self.M_MAX if layer == 0 else self.M0
-                self.graph[layer][id] = {}
-                if not self.heuristic:
-                    self.select_neighbors_simple(id,EP,M,layer)
-                else:
-                    self.select_neighbors_heuristic(id,EP,M,layer)
-                self.entry_points = W
-        
-        for i in range(len(self.graph),L):
-            self.graph.append({id:{}})
-        self.entry_points = id
-        self.max_layers = L
+        # those are just "references" to the class attributes
+        data = self.data
+        graphs = self.graph
+        point = self.entry_points
+        m = self.M
+        level = int(self.get_node_layers()) + 1
+        idx = len(data)
+        data.append(element)
+
+        if point is not None:
+            e1,e2 =np.copy(element),np.copy(data[point])
+            dist = cosine_similarity(e1.reshape(1,-1),e2.reshape(1,-1))[0][0]
+            for layer,plane in enumerate(reversed(graphs[level:])):
+                point, dist = self.search_layer_ef1(element, dist, (dist,point), layer)
+            ep = [(dist, point)]
+            layer0 = graphs[0]
+            for layer,plane in enumerate(reversed(graphs[:level])):
+                M = m if graphs[layer] is not layer0 else self.M0
+                ep = self.search_layer(element, ep, self.efConstruction,layer)
+                plane[idx] = layer_idx = {}
+                # self.select_neighbors_simple(idx,ep,M,layer)
+        for i in range(len(graphs), level):
+            graphs.append({idx: {}})
+            self.entry_points = idx
+        #print(len(self.data),self.data,self.graph)
         
         
     def find_closest(self,element,K= 3):
@@ -332,9 +339,9 @@ class HNSW(object):
             self.vectors = None
             
         
-dataset = np.random.normal(size=(10000,10))
+dataset = np.random.normal(size=(100,3))
 hnsw = HNSW(10,10,10,False,5,6,dataset)
 hnsw.graph_creation()
-        
+print(hnsw.graph)
                          
             
