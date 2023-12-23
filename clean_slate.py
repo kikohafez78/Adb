@@ -4,11 +4,11 @@
 #          3-Abdulhameed                           |
 #          4-Seif albaghdady                       |
 # Subject: ADB                                     |
-# Project: HNSW +                                  |
+# Project: HNSW + IVF                              |
 # ==================================================
 import math
 import random
-from heapq import heapify, heappop, heappush, heappushpop, heapreplace, nlargest
+from heapq import nsmallest,heapify, heappop, heappush, heappushpop, heapreplace, nlargest
 from IVF import IVFile
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -18,26 +18,27 @@ import pandas as pd
 import xlrd as xl
 from product_quantization import quantizer
 
-def get_consin_similarity(self, vector: np.ndarray):
-    return cosine_similarity(self.data, vector)
-
-
-
 
 class HNSW(object):
-    def __init__(self, M: int, efSearch: int, efConstruction: int, vectors: np.ndarray = None, heuristic=False, M0: int = None,useIVF:bool = False,useQuantizer: bool = False,partitions:int = 3,segments: int = 3) -> None:
-        self.M = M
-        self.M_MAX = 2 * M  # just a heuristic (based on the paper)
-        self.M0 = np.ceil(np.log2(M0)) if M0 is not None else 2 * M
+    def cosine_distance(self, a, b):
+        return -np.dot(a, b) / (np.linalg.norm(a) * (np.linalg.norm(b)))
+    def vectorized_distance_(self, x, ys):
+        return [self.distance_func(x, y) for y in ys]
+
+    def __init__(self,m=5, ef=200, m0=None, heuristic=True,efSearch: int = 50, efConstruction: int = 50, vectors:np.ndarray = None,useIVF:bool = False,useQuantizer: bool = False,partitions:int = 3,segments: int = 3):
+        self.data:list[np.ndarray] = []
+        self.distance_func = self.cosine_distance
+        self.vectorized_distance = self.vectorized_distance_
+        self._m = m
+        self._ef = ef
+        self._m0 = np.ceil(np.log2(m0)) if m0 is not None else 2*self._m
+        self._level_mult = 1 / math.log2(m)
+        self._graphs: list[dict[int : [dict[int, int]]]] = []
+        self._enter_point = None
+        self._select = self.heuristic_selection if heuristic else self.normal_selection
+        self.vectors = vectors
         self.efSearch = efSearch
         self.efConstruction = efConstruction
-        self.entry_points = None
-        self.max_layers = -1
-        self.heuristic = heuristic
-        self.ml = 1.0 / math.log2(M)  # the closer to 1/ln(M) the better
-        self.graph: list[dict[int : [dict[int, int]]]] = []  # graph[layer]{indx: {neighbor: distance}}
-        self.data:list[np.ndarray] = []# data[node_id] = vector
-        self.vectors = vectors
         if useIVF and useQuantizer:
             self.IVF = IVFile(partitions,vectors)
             self.quantizer = quantizer(len(vectors[0]),segments)
@@ -49,12 +50,6 @@ class HNSW(object):
             self.IVF = None
         else:
             self.IVF = self.quantizer = None
-    def create_IVF(self):
-        self.assignments = self.IVF.clustering()
-        self.centroids = [np.fromstring(cluster) for cluster in self.assignments.keys()]
-    def get_neighbors_list(self,id):
-        return self.graph[:][id]
-
     def get_data(self):
         return self.data
     def similarity(self,query: np.ndarray,neighbor: np.ndarray):
@@ -70,220 +65,229 @@ class HNSW(object):
         heap.sort(reverse=True)  # sort descending
         return heap
     def get_layer_location(self):
-        return np.round(-float(math.log(random.uniform(0, 1))) * self.ml)
-    def search_layer(self, q: np.ndarray, entry_points: list[(float,int)], ef: int, layer: int):
-        data = self.data
-        plane = self.graph[layer]
-        candidates = [(-sim, points) for sim, points in entry_points]
-        visited = set(point for _, point in entry_points)
-        heapify(candidates)
-        while candidates:
-            sim, point = heappop(candidates)
-            starting_sim = entry_points[0][0]
-            if sim > -starting_sim:
-                break
-            try:
-                neighbors = [neighbor for neighbor in plane[point] if neighbor not in visited]
-            except:
-                neighbors = []
-                logs.critical(f"search layer is skipping the neighbors @ node {point}\n")
-            visited.update(neighbors)
-            similarities = self.calculate_distances([data[neighbor] for neighbor in neighbors],q)
-            for point, sim in zip(neighbors, similarities):
-                max_sim = -sim
-                if len(entry_points) < ef:
-                    heappush(candidates, (sim, point))
-                    heappush(entry_points, (max_sim, point))
-                    starting_sim = entry_points[0][0]
-                elif max_sim > starting_sim:
-                    heappush(candidates, (sim, point))
-                    heapreplace(entry_points, (max_sim, point))
-                    starting_sim = entry_points[0][0]
-        if entry_points == None or len(entry_points) == 0: logs.warning(f"empty entry point @ node {q}\n")
-        return entry_points
-    def search_layer_ef1(self, query:np.ndarray , entry_point: int, dist: float, layer: int):
-        data = self.data
-        plane = self.graph[layer]
-        closest_vec = entry_point
-        closest_simlarity = dist
-        candidates = [(dist, entry_point)]
-        visited = set([entry_point])
-
-        while candidates:
-            dist, point = heappop(candidates)
-            if dist > closest_simlarity:
-                break
-            try:
-                neighbors = [neighbor for neighbor in plane[point] if neighbor not in visited]
-            except:
-                neighbors = []
-                logs.critical("search ef1 is skipping the neighbors @ node {point}\n")
-            visited.update(neighbors)
-            dists = self.calculate_distances([data[e] for e in neighbors],query)
-            for neighbor, dist in zip(neighbors, dists):
-                if dist < closest_simlarity:
-                    closest_vec = neighbor
-                    closest_simlarity = dist
-                    heappush(candidates, (dist, neighbor))
-        return closest_simlarity, closest_vec
-    
-    def get_closest_simple(self,current: (float,int),M: int,layer: int):
-        pass
-    
-    def Insert(self,query: np.ndarray):
-        data = self.data
-        id = len(data)
-        data.append(query)
-        graph = self.graph
-        entry = self.entry_points
-        M = self.M
-        L = int(self.get_layer_location())
-        if entry is not None:
-            distance_to_entry = self.array_similarity(self.data[entry],query)
-            for layer,planes in enumerate(graph[L:]):
-                distance_to_entry, entry = self.search_layer_ef1(query,entry,distance_to_entry,layer)
-            ep = [(distance_to_entry,  entry)]
-            for layer, planes in enumerate(reversed(graph[:L])):
-                M = self.M_MAX if layer != 0 else self.M0
-                ep = self.search_layer(query,ep,self.efConstruction,layer) 
-                planes[id] = {}
-                if self.heuristic:
-                    pass
-                else:
-                    pass
-                for ids,cosine_similarity in planes[id].items():
-                    if self.heuristic:
-                        pass
-                    else:
-                        pass
-        for plane in range(len(graph),L):
-            graph.append({id:{}})
-            self.entry_points = id
-        logs.log(0,f"succefully inserted node{id} @ level {L} and the number of current layers is {len(graph)}\n")
-    
-    def normal_selection(self,neigborhood: dict, current_node:list[(float,int)], M: int, layer: int):
-        data = self.data
-        sim,id = current_node
-        if id not in neigborhood and len(neigborhood) < M:
-            neigborhood[id] = sim
-            current_node.pop(0)
-        if not any(ids for _, ids in current_node):
-            current_node = nlargest(M, current_node, key = itemgetter(0))
-            remaining = M - len(neigborhood)
-            current_node, possible_inserts = current_node[:remaining],current_node[remaining:]
-            no_po_in = len(possible_inserts)
-            if no_po_in > 0:
-                replacements = nlargest(no_po_in,neigborhood.items(),key = itemgetter(1))
+        return np.round(-float(math.log(random.uniform(0, 1))) * self._level_mult)
+    def normal_selection(self, d: dict, to_insert:list[(float,int)], m: int, layer: dict, forward=False):
+        if not forward:
+            idx, dist = to_insert
+            if len(d) < m:
+                d[idx] = dist
             else:
-                replacements = []
-                for dist,id in current_node:
-                    dist[id] = -dist
-                for (new_dist, new_id),(old_id,old_dist) in zip(possible_inserts,replacements):
-                    if old_dist <= new_dist:
-                        break
-                    del neigborhood[old_id]
-                    neigborhood[new_id] = -new_dist
-    
-    def get_document_data(self, name):
-        data = pd.read_csv("./"+name)
-        pass
-        
-        
-    
-    
-    
+                max_idx, max_dist = max(d.items(), key=itemgetter(1))
+                if dist < max_dist:
+                    del d[max_idx]
+                    d[idx] = dist
+            return
+
+        to_insert = nlargest(m, to_insert)
+        remaining = m - len(d)
+        to_insert, replacements = to_insert[:remaining], to_insert[remaining:]
+        possible_replacements = len(replacements)
+        if possible_replacements > 0:
+            best_replacements = nlargest(possible_replacements, d.items(), key=itemgetter(1))
+        else:
+            best_replacements = []
+        for md, idx in to_insert:
+            d[idx] = -md
+        for (md_new, idx_new), (idx_old, d_old) in zip(replacements, best_replacements):
+            if d_old <= -md_new:
+                break
+            del d[idx_old]
+            d[idx_new] = -md_new
+
+
+    def heuristic_selection(self, d: dict, to_insert:list[(float,int)], m: int, g, forward: bool=False):
+        nb_dicts = [g[idx] for idx in d]
+        def prioritize(idx, dist):
+            return any(nd.get(idx, float("inf")) < dist for nd in nb_dicts), dist, idx
+        if not forward:
+            idx, dist = to_insert
+            to_insert = [prioritize(idx, dist)]
+        else:
+            to_insert = nsmallest(m, (prioritize(idx, -mdist) for mdist, idx in to_insert))
+        unchecked = m - len(d)
+        to_insert, checked_ins = to_insert[:unchecked], to_insert[unchecked:]
+        to_check = len(checked_ins)
+        if to_check > 0:
+            checked_del = nlargest(to_check, (prioritize(idx, dist) for idx, dist in d.items()))
+        else:
+            checked_del = []
+        for _, dist, idx in to_insert:
+            d[idx] = dist
+        for (p_new, d_new, idx_new), (p_old, d_old, idx_old) in zip(checked_ins, checked_del):
+            if (p_old, d_old) <= (p_new, d_new):
+                break
+            del d[idx_old]
+            d[idx_new] = d_new
+            
     def search(self, query_element: np.ndarray, ef: int = None, k: int = None):
-        graph = self.graph
-        entry_point = self.entry_points
+        graph = self._graphs
+        entry_point = self._enter_point
         if entry_point is None:
             raise Exception("The graph is empty, please insert some elements first")
         if ef is None:
             ef = self.efSearch
         if k is None:
-            k = self.M
-        sim = cosine_similarity(query_element, self.entry_points)
-        for layer in reversed(graph[1:]):  # loop on the layers till you reach layer 1
+            k = self._m
+        sim = self.distance_func(query_element, self._enter_point)
+        for layer in reversed(graph[1:]):
             entry_point, sim = self.search_layer_ef1(query_element, sim, entry_point, layer)
         candidates = self.search_layer(query_element, [(sim, entry_point)], ef, 0)
         candidates = nlargest(k, candidates)
         return [(sim, idxs) for sim, idxs in candidates]    
-    
-    def find_closest(self,element,K= 3):
-        if len(self.graph) == 0 or element is None or K <= 0:
-                return None
-        if self.IVF is None:
-            ep = self.entry_points
-            distance_ep = self.array_similarity(self.data[ep],element)
-            Graph = self.graph
-            for layer,nodes in enumerate(reversed(Graph)):
-                if layer > 0:
-                    new_ep,distance = self.search_layer_ef1(element,distance_ep,ep,layer)
-                else:
-                    ep = self.search_layer(element,[(distance,new_ep)],self.efSearch,layer)
-                    if K > 1:
-                        ep = nlargest(K,ep)
-                    else:
-                        sorted(ep,reverse=True)
-                        return ep[0]
-            return ep[:K]
-        else:
-            ep = self.entry_points
-            distance_ep = self.array_similarity(self.data[ep],element)
-            Graph = self.graph
-            for layer,nodes in enumerate(reversed(Graph)):
-                if layer > 0:
-                    new_ep,distance = self.search_layer_ef1(element,distance_ep,ep,layer)
-                else:
-                    ep = self.search_layer(element,[(distance,new_ep)],self.efSearch,layer)
-                    if K > 1:
-                        ep = nlargest(K,ep)
-                    else:
-                        sorted(ep,reverse=True)
-                        return self.IVF.get_K_closest_neighbors_given_centroids(self.data[ep[0][1]], element, K)
-            return self.IVF.get_K_closest_neighbors_given_centroids(self.data[ep[:K][1]], element, K)
+
+    def fast_insertion(self, elem: np.ndarray):
+        distance = self.distance_func
+        data = self.data
+        graphs = self._graphs
+        point = self._enter_point
+        m = self._m
+        m0 = self._m0
+        idx = len(data)
+        data.append(elem)
+        if point is not None:
+            dist = distance(elem, data[point])
+            pd = [(point, dist)]
+            for layer in reversed(graphs[1:]):
+                point, dist = self.search_layer_ef1(elem, point, dist, layer)
+                pd.append((point, dist))
+            for level, layer in enumerate(graphs):
+                level_m = m0 if level == 0 else m
+                candidates = self.search_layer(elem, [(-dist, point)], layer, self.efConstruction)
+                layer[idx] = layer_idx = {}
+                self._select(layer_idx, candidates, level_m, layer, forward=True)
+                for j, dist in layer_idx.items():
+                    self._select(layer[j], [idx, dist], level_m, layer)
+                    assert len(layer[j]) <= level_m
+                if len(layer_idx) < level_m:
+                    return
+                if level < len(graphs) - 1:
+                    if any(p in graphs[level + 1] for p in layer_idx):
+                        return
+                point, dist = pd.pop()
+        graphs.append({idx: {}})
+        self._enter_point = idx
+
+    def search_layer_ef1(self, q: np.ndarray, entry: int, dist: float, layer: dict):
+        vectorized_distance = self.vectorized_distance
+        data = self.data
+        best = entry
+        best_dist = dist
+        candidates = [(dist, entry)]
+        visited = set([entry])
+        while candidates:
+            dist, c = heappop(candidates)
+            if dist > best_dist:
+                break
+            edges = [e for e in layer[c] if e not in visited]
+            visited.update(edges)
+            dists = vectorized_distance(q, [data[e] for e in edges])
+            for e, dist in zip(edges, dists):
+                if dist < best_dist:
+                    best = e
+                    best_dist = dist
+                    heappush(candidates, (dist, e))
+        return best, best_dist
+
+    def search_layer(self, q: np.ndarray, ep:list[(float,int)], layer: dict, ef: int):
+        vectorized_distance = self.vectorized_distance
+        data = self.data
+        candidates = [(-sim, point) for sim, point in ep]
+        heapify(candidates)
+        visited = set(point for _, point in ep)
+        while candidates:
+            dist, point = heappop(candidates)
+            mref = ep[0][0]
+            if dist > -mref:
+                break
+            neighbors = [neighbor for neighbor in layer[point] if neighbor not in visited]
+            visited.update(neighbors)
+            dists = vectorized_distance(q, [data[neighbor] for neighbor in neighbors])
+            for neighbor, dist in zip(neighbors, dists):
+                mdist = -dist
+                if len(ep) < ef:
+                    heappush(candidates, (dist, neighbor))
+                    heappush(ep, (mdist, neighbor))
+                    mref = ep[0][0]
+                elif mdist > mref:
+                    heappush(candidates, (dist, neighbor))
+                    heapreplace(ep, (mdist, neighbor))
+                    mref = ep[0][0]
+
+        return ep
+    def index_file_creation(self):
+        layer_assignment = {}
+        graph = self._graphs.copy()
+        for layer,plane in enumerate(reversed(self._graphs)):
+            l = np.asarray([plane])
+            np.savetxt(f"layer_{layer}.npy",l)
+
+    def get_document_data(self, name):
+        data = pd.read_csv("./"+name)
+        pass
         
-    def search_using_IVF(self,element: np.ndarray,ef:int,K:int):
-        graph = self.graph.copy()
-        closest_centroid = self.IVF.get_closest_centroids(element,K)
-        cluster_data = self.IVF.get_cluster_data(closest_centroid,element,K)
-        #===========================================
-        for plane in graph:
-            for vec in plane.keys():
-                if vec not in cluster_data:
-                    for link in plane[vec].keys():
-                        del plane[link][vec]
-                    del plane[vec]
-        #===========================================
-        #experimental do not try, here i terminate all nodes in search space unrelated to the cluster i am closest to then i terminate all of their backlinks  
-        #decreasing search space as requested     
-        entry_point = self.entry_points
+    
+    def search(self, query_element: np.ndarray, ef: int = None, k: int = None):
+        graph = self._graphs
+        entry_point = self._enter_point
         if entry_point is None:
             raise Exception("The graph is empty, please insert some elements first")
         if ef is None:
             ef = self.efSearch
         if k is None:
-            k = self.M
-        sim = cosine_similarity(element, self.entry_points)
+            k = self._m
+        sim = self.distance_func(query_element, self.data[self._enter_point])
         for layer in reversed(graph[1:]):  # loop on the layers till you reach layer 1
-            entry_point, sim = self.search_layer_ef1(element, sim, entry_point, layer)
-        candidates = self.search_layer(element, [(sim, entry_point)], ef, 0)
+            entry_point, sim = self.search_layer_ef1(query_element, entry_point, sim, layer)
+        candidates = self.search_layer(query_element, [(sim, entry_point)], graph[0], ef)
         candidates = nlargest(k, candidates)
-        return [(sim, idxs) for sim, idxs in candidates] 
-        
+        return [(sim, idxs) for sim, idxs in candidates]    
+    
+    def find_closest(self,element,K= 3):#find everything using IVF primitive
+        if len(self._graphs) == 0 or element is None or K <= 0:
+                return None
+        if self.IVF is None:
+            return self.search(element,K)
+        else:
+            graph = self._graphs
+            entry_point = self._enter_point
+            if entry_point is None:
+                raise Exception("The graph is empty, please insert some elements first")
+            if ef is None:
+                ef = self.efSearch
+            if k is None:
+                k = self._m
+            sim = self.distance_func(element, self.data[self._enter_point])
+            for layer in reversed(graph[1:]):  # loop on the layers till you reach layer 1
+                entry_point, sim = self.search_layer_ef1(element, entry_point, sim, layer)
+            candidates = self.search_layer(element, [(sim, entry_point)], graph[0], ef)
+            candidates = nlargest(k, candidates)
+            return self.IVF.get_K_closest_neighbors_given_centroids(self.data[candidates[:][1]], element, K)
+ 
+    def search_using_IVF(self,element: np.ndarray,ef:int,K:int): #finds using advanced IVF
+        pass 
+    def create_HNSWIVF(self):
+        pass
+            
+
     def graph_creation(self):
         if self.IVF is None:
             for vector in self.vectors:
-                self.Insert(vector)
+                self.fast_insertion(vector)
             self.vectors = None
         else:
             self.clusters = self.IVF.clustering().keys()
+            
             for vector in self.vectors:
-                self.Insert(vector)
+                self.fast_insertion(vector)
             self.vectors = None
-    
-dataset = np.random.normal(size=(10000,4))
-hnsw = HNSW(2,16,16,dataset,False,None,False,False,0,0)
+
+dataset = np.random.normal(size=(100,3))
+hnsw = HNSW(2,0,None,True,50,50,dataset,False,False,0,0)
 hnsw.graph_creation()
-print(hnsw.graph)   
-    
-           
+vector = np.random.normal(size=(1,3))
+print(hnsw._graphs)
+found = hnsw.search(vector,k=4,ef=30)
+for f in found:
+    print(hnsw.data[f[1]])
+    print(cosine_similarity([hnsw.data[f[1]]],vector))
+print(vector)
