@@ -9,10 +9,12 @@
 import math
 import random
 from heapq import heapify, heappop, heappush, heappushpop, heapreplace, nlargest
-from IVF import IVFile
+from operator import itemgetter
+
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-from operator import itemgetter
+
+from IVF import IVFile
 
 
 # from product_quantization import quantizer
