@@ -2,7 +2,7 @@ from operator import itemgetter
 
 import numpy as np
 from scipy.cluster.vq import kmeans2
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.metrics.pairwise import cosine_similarity
 
 
@@ -30,7 +30,10 @@ class IVFile(object):
         self.vectors = vectors
 
     def clustering(self):
-        (centroids, assignments) = kmeans2(self.vectors, self.partitions)
+        kmeans = MiniBatchKMeans(n_clusters=self.partitions)
+        assignments = kmeans.fit_predict(self.vectors)
+        centroids = kmeans.cluster_centers_
+        # (centroids, assignments) = kmeans2(self.vectors, self.partitions)
         self.data = (centroids, assignments)
         index = [[] for _ in range(self.partitions)]
         for n, k in enumerate(assignments):
