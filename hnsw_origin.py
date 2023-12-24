@@ -314,10 +314,6 @@ class HNSW(object):
             d[idx_new] = -md_new
             assert len(d) == m
 
-    """
-    
-    """
-
     def _select_heuristic(self, d, to_insert, m, g, heap=False):
         nb_dicts = [g[idx] for idx in d]
 
