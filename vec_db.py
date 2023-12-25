@@ -1,61 +1,50 @@
 import numpy as np
 
-from clean_slate import HNSW, IVFile, cosine_similarity, itemgetter, nlargest
-
-
+from non_normal_IVF import IVFile_optimized
+from IVF import IVFile
+import csv
+batch = {
+            "saved_db_100k.csv": 100000,
+            "saved_db_1m.csv": 1000000,
+            "saved_db_5m.csv": 5000000,
+            "saved_db_10m.csv": 10000000,
+            "saved_db_15m.csv": 15000000,
+            "saved_db_20m.csv": 20000000
+        }
+file_size = {
+            "saved_db_100k.csv": 1000,
+            "saved_db_1m.csv": 10000,
+            "saved_db_5m.csv": 50000,
+            "saved_db_10m.csv": 100000,
+            "saved_db_15m.csv": 150000,
+            "saved_db_20m.csv": 200000
+}
+folders = {
+    "saved_db_100k.csv": "100k",
+    "saved_db_1m.csv": "1m",
+    "saved_db_5m.csv": "5m",
+    "saved_db_10m.csv": "10m",
+    "saved_db_15m.csv": "15m",
+    "saved_db_20m.csv": "20m"
+}
 class vec_db(object):
-    def __init__(self, partitions: int, vectors: np.ndarray):
-        self.IVF = IVFile(partitions, vectors)
-        self.partitions = partitions
-
+    def __init__(self, file_name: str):
+        self.file = file_name
+        self.folder_path =  folders[file_name]
+        self.Ivf = IVFile_optimized(batch[file_name],file_size[file_name])
+    def  set_type(self,file_name: str):
+        self.file = file_name
+        self.folder_path =  folders[file_name]
+        self.Ivf = IVFile_optimized(batch[file_name],file_size[file_name])
     def build_index(self):
-        self.assignments = self.IVF.clustering()
-        x = 1
-        for assignment in self.assignments.keys():
-            data = self.IVF.cluster_data(np.fromstring(assignment))
-            hnsw = HNSW(2, 0, None, True, 50, 50, data, False, False, 0, 0)
-            hnsw.graph_creation()
-            graph = [hnsw.data, hnsw._graphs]
-            array = np.asarray(graph)
-            np.save(f"./data/hnsw{x}.npy", array)
-            self.assignments[assignment] = f"./data/hnsw{x}.npy"
-            x += 1
-        for i in range(self.partitions):
-            np.delete(f"./data/file{i}.npy")
-        data = [np.formstring(assignment) for assignment in self.assignments.keys()]
-        self.hnsw = HNSW(2, 0, None, True, 50, 50, data, False, False, 0, 0)
-        self.hnsw.graph_creation()
-        graph = [self.hnsw.data, self.hnsw._graphs]
-        array = np.asarray(graph)
-        np.save("./data/hnsw0.npy", array)
-        self.hnsw._graphs = None
-        self.hnsw.data = None
-        self.name = "./data/hnsw0.npy"
-
-    def search_index(self, query: np.ndarray, K: int):
-        graph = np.load(self.name)
-        self.hnsw._graphs = graph[1]
-        self.hnsw.data = graph[0]
-        centroids = self.hnsw.search(query, K)
-        for centroid in centroids:
-            centroid[1] = self.hnsw.data[centroid[1]]
-        files = [self.assignments[str(centroid[1])] for centroid in centroids]
-        closest = []
-        for file in files:
-            graph = np.load(file)
-            self.hnsw._graphs = graph[1]
-            self.hnsw.data = graph[0]
-            vectors = self.hnsw.search(query, K)
-            for vector in vectors:
-                vector[1] = self.hnsw.data[vector[1]]
-            closest += vectors
-        data = nlargest(K, closest, key=itemgetter(0))
-        self.hnsw._graphs = None
-        self.hnsw.data = None
-        return data
-
-
-dataset = np.random.normal(size=(100, 3))
-vecDB = vec_db(16, dataset)
-vecDB.build_index()
-vector = np.random.normal(size=(1, 3))
+        self.Ivf.build_index(self.file,self.folder_path, 1)
+    def insert_records(self, records: list):
+        pass
+    def retreive(self, query: np.ndarray, K:int):
+        return self.Ivf.retrieve_k_closest(query,K)
+    
+    
+    
+    
+vecdb = vec_db()
+        

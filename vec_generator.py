@@ -1,14 +1,17 @@
 import numpy as np
 import csv
-
-outfile = 'random_vectors.csv'
-num_vectors = 100000
-vector_dim = 4
-X = 0
-with open(outfile, 'w', newline='') as csvfile:
-    writer = csv.writer(csvfile)
-    for i in range(num_vectors):
-        print(X)
-        vector = np.random.normal(size=(1,vector_dim))[0]
-        writer.writerow(vector)
-        X += 1
+rng = np.random.default_rng(50)
+with open("./5m/saved_db_5m.csv",'a',newline='') as csvfile:
+    pass
+vectors = rng.random((5000000, 70), dtype=np.float32)
+np.savetxt("./5m/saved_db_5m.csv", vectors,delimiter=",")
+del vectors
+# vectors = rng.random((5000000, 70), dtype=np.float32)
+# np.save("data/database_5M_2.npy", vectors)
+# del vectors
+# vectors = rng.random((5000000, 70), dtype=np.float32)
+# np.save("data/database_5M_3.npy", vectors)
+# del vectors
+# vectors = rng.random((5000000, 70), dtype=np.float32)
+# np.save("data/database_5M_4.npy", vectors)
+# del vectors

@@ -106,6 +106,7 @@ class IVFile_optimized(object):
                                 writer = csv.writer(csvfile)
                                 writer.writerows(vectors)
         else:
+            X = 0
             with open(file_name_s,'r') as csvfile:
                 reader = csv.reader(csvfile)
                 for vector in reader:
@@ -116,7 +117,9 @@ class IVFile_optimized(object):
                     file_to_insert = self.clusters[str(self.centroids[labels])]
                     with open(file_to_insert,'a', newline='') as csvfile:
                         writer = csv.writer(csvfile)
+                        vector.append(X)
                         writer.writerow(vector)
+                    X += 1
             
                            
 
@@ -146,13 +149,13 @@ class IVFile_optimized(object):
                 all_rows = list(reader)
                 if all_rows == []:
                     continue
-                closest_k = sort_vectors_by_cosine_similarity(all_rows,query)[0][:K+1]
+                closest_k = sort_vectors_by_cosine_similarity(all_rows[:][:70],query)[0][:K+1]
                 closest_k = [all_rows[vector] for vector in closest_k]
                 for vector in closest_k:
                     vector  = np.array([float(vec) for vec in vector],dtype=float)
                     full_vectors.append(vector)
         # print(full_vectors)
-        closest_indices = sort_vectors_by_cosine_similarity(full_vectors,query)[0][:K+1]
+        closest_indices = sort_vectors_by_cosine_similarity(full_vectors[:][:70],query)[0][:K+1]
         closest_vectors = []
         for vector,value in enumerate(closest_indices):
             # print(vector,value)
@@ -195,7 +198,7 @@ class IVFile_optimized(object):
                 
 test_vector = [1.356549859046936035e-01,7.601705193519592285e-01,7.894873619079589844e-01,5.459748506546020508e-01,6.158747673034667969e-01,8.827945590019226074e-01,8.573454618453979492e-02,4.456452131271362305e-01,2.457318902015686035e-01,3.362176418304443359e-01,7.569709420204162598e-01,1.734935045242309570e-01,1.175599098205566406e-01,9.990936517715454102e-01,3.962355852127075195e-01,1.498378515243530273e-01,1.471777558326721191e-01,9.817693233489990234e-01,9.413446784019470215e-01,8.490877747535705566e-01,7.055155038833618164e-01,7.967842817306518555e-01,6.494476795196533203e-01,9.378776550292968750e-01,2.359203696250915527e-01,1.019475460052490234e-01,9.782267808914184570e-01,1.652941107749938965e-01,3.455436229705810547e-02,4.011875391006469727e-01,9.487032890319824219e-03,8.921121358871459961e-01,9.214249253273010254e-01,8.608156442642211914e-01,2.790191173553466797e-01,3.017135858535766602e-01,2.334207296371459961e-02,5.363611578941345215e-01,8.772153854370117188e-01,1.413692235946655273e-01,2.500416636466979980e-01,6.492682099342346191e-01,6.941686272621154785e-01,6.659759879112243652e-01,3.610870242118835449e-01,4.449421763420104980e-01,7.560720443725585938e-01,3.450798988342285156e-02,4.606603980064392090e-01,4.232681989669799805e-01,7.925334572792053223e-01,1.159440279006958008e-01,9.027293920516967773e-01,5.301722884178161621e-01,6.587631106376647949e-01,6.501644849777221680e-01,6.776183247566223145e-01,2.136875987052917480e-01,7.257928848266601562e-01,2.976732254028320312e-01,9.329499006271362305e-01,3.651674389839172363e-01,1.487530469894409180e-01,6.382648348808288574e-01,1.659295558929443359e-01,9.258993864059448242e-01,3.332807421684265137e-01,4.010143280029296875e-01,7.749438285827636719e-03,7.619243860244750977e-01]
 IV = IVFile_optimized(10000,1000000)
-IV.build_index("saved_db_1m.csv","1m",1)
+IV.build_index("saved_db_100k.csv","100k",1)
 # vectors = IV.retrieve_k_closest("100k",test_vector,3)
 # for vector in vectors:
 #     print(cosine_similarity([test_vector],[vector]))
