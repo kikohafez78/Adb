@@ -86,7 +86,7 @@ class IVFile_optimized(object):
                 self.clusters[str(centroid)] = f"./data/data{X}.csv"
                 X += 1
             self.final_pass(file_name_s, n)
-            with open(f"./clusters.csv", "a", newline="") as csvfile:
+            with open("./clusters.csv", "a", newline="") as csvfile:
                 writer = csv.writer(csvfile)
                 for centroid in self.centroids:
                     writer.writerow(centroid)

@@ -31,7 +31,7 @@ class vec_db(object):
             "saved_db_20m.csv": 8000,
         }
         self.partitions = switch[file_path]
-        self.vectors = vectors  # TODO: to be replaced with a file paths that we will load the vectors from (numpy arrays)
+        # self.vectors = vectors  # TODO: to be replaced with a file paths that we will load the vectors from (numpy arrays)
 
     def build_index(self):
         # TODO: make the clustering work with batches of vectors instead of all at once (memory issues)
