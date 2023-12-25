@@ -44,8 +44,5 @@ class vec_db(object):
     def retreive(self, query: np.ndarray, K:int):
         return self.Ivf.retrieve_k_closest(query,K)
     
-    
-    
-    
+
 vecdb = vec_db()
-        
