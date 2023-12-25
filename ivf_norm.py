@@ -1,7 +1,10 @@
+import pickle as pi
+
 import numpy as np
 from sklearn.cluster import MiniBatchKMeans
+
 from clean_slate import HNSW, IVFile, cosine_similarity, itemgetter, nlargest
-import pickle as pi
+
 
 def sort_vectors_by_cosine_similarity(vectors, reference_vector):
     # Calculate cosine similarities
@@ -16,26 +19,27 @@ def sort_list(list1, list2):
     z = [x for _, x in sorted(zipped_pairs)]
     return z
 
+
 sizes = {
-            "saved_db_100k": 100000,
-            "saved_db_1m": 1000000,
-            "saved_db_5m": 5000000,
-            "saved_db_10m": 10000000,
-            "saved_db_20m": 20000000,
-        }
+    "saved_db_100k": 100000,
+    "saved_db_1m": 1000000,
+    "saved_db_5m": 5000000,
+    "saved_db_10m": 10000000,
+    "saved_db_20m": 20000000,
+}
 batches = {
-        "saved_db_100k": 100000,
-        "saved_db_1m": 1000000,
-        "saved_db_5m": 5000000,
-        "saved_db_10m": 10000000,
-        "saved_db_20m": 20000000,
-    }
+    "saved_db_100k": 100000,
+    "saved_db_1m": 1000000,
+    "saved_db_5m": 5000000,
+    "saved_db_10m": 10000000,
+    "saved_db_20m": 20000000,
+}
 n_files = {
-        "saved_db_100k": 10,
-        "saved_db_1m": 100,
-        "saved_db_5m": 500,
-        "saved_db_10m": 1000,
-        "saved_db_20m": 2000,
+    "saved_db_100k": 10,
+    "saved_db_1m": 100,
+    "saved_db_5m": 500,
+    "saved_db_10m": 1000,
+    "saved_db_20m": 2000,
 }
 
 
@@ -44,14 +48,15 @@ class vec_db(object):
         self.folder = file_path
         self.partitions = np.ceil(sizes[file_path] / np.sqrt(sizes[file_path])) * 3
         self.batch_size = batches[file_path]
-        
+
     def insert_records(self, vectors: list):
         self.vectors = vectors
+
     def build_index(self):
-        #===================================================
+        # ===================================================
         kmeans = MiniBatchKMeans(n_clusters=self.partitions)
         kmeans.partial_fit(self.vectors)
-        #===================================================
+        # ===================================================
         assignments = kmeans.labels_
         centroids = kmeans.cluster_centers_
         self.data = (centroids, assignments)
@@ -70,7 +75,7 @@ class vec_db(object):
         self.assigments = centroid_assignment
         self.vectors = None  # <===
         file = open(f"./{self.folder}/clusters.npy", "a")
-        np.save(f"./{self.folder}/clusters.npy",np.asarray([self.assigments]))
+        np.save(f"./{self.folder}/clusters.npy", np.asarray([self.assigments]))
         file.close()
         return self.assigments
 
@@ -89,7 +94,7 @@ class vec_db(object):
     def cluster_data(self, centroids: np.ndarray):
         return [np.load(self.assigments[str(centroid)]) for centroid in centroids]
 
-    def get_closest_k_neighbors(self, vector: np.ndarray, K: int):#<===
+    def get_closest_k_neighbors(self, vector: np.ndarray, K: int):  # <===
         centroids = self.get_closest_centroids(vector, K)
         closest = []
         for centroid in centroids:
