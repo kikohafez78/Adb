@@ -24,14 +24,14 @@ def sort_list(list1, list2):
 class vec_db(object):
     def __init__(self, file_path: str, new_db=False):
         switch = {
-            "saved_db_100k.csv" : 200,
-            "saved_db_1m.csv" : 1500,
-            "saved_db_5m.csv" : 4000,
-            "saved_db_10m.csv" : 6000,
-            "saved_db_20m.csv" : 8000,
+            "saved_db_100k.csv": 200,
+            "saved_db_1m.csv": 1500,
+            "saved_db_5m.csv": 4000,
+            "saved_db_10m.csv": 6000,
+            "saved_db_20m.csv": 8000,
         }
         self.partitions = switch[file_path]
-        self.vectors = vectors # TODO: to be replaced with a file paths that we will load the vectors from (numpy arrays)
+        self.vectors = vectors  # TODO: to be replaced with a file paths that we will load the vectors from (numpy arrays)
 
     def build_index(self):
         # TODO: make the clustering work with batches of vectors instead of all at once (memory issues)
