@@ -2,6 +2,7 @@ import numpy as np
 from numpy import ndarray
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics.pairwise import cosine_similarity,pairwise_distances
+from sklearn.preprocessing import normalize
 import csv
 from itertools import islice
 from heapq import nlargest
@@ -50,6 +51,7 @@ class IVFile_optimized(object):
                     reader = csv.reader(csvfile)
                     while True:
                         batch = list(islice(reader, self.batch_size))
+                        batch = normalize(batch)
                         if not batch:
                             break
                         self.Kmeans.partial_fit(batch)
@@ -91,9 +93,10 @@ class IVFile_optimized(object):
                     reader = csv.reader(csvfile)
                     while True:
                         batch = list(islice(reader,self.batch_size))
+                        values = normalize(batch)
                         if not batch:
                             break
-                        labels = np.argmax(self.similarity([batch],self.centroids),axis = 1)
+                        labels = np.argmax(self.similarity([values],self.centroids),axis = 1)
                         grouped_vectors_dict = {i: [vector for vector, label in zip(batch, labels) if label == i] for i in range(self.partitions)}
                         for label,vectors in  grouped_vectors_dict.keys(),grouped_vectors_dict:
                             file_to_insert = self.clusters[self.centroids[label]]
@@ -126,6 +129,7 @@ class IVFile_optimized(object):
                            
 
     def retrieve_k_closest(self,query: np.ndarray, K: int): #retrieval function
+        # query = normalize(query)
         self.assignments = {}
         X = 0
         self.centroids = []
@@ -137,6 +141,7 @@ class IVFile_optimized(object):
                 self.assignments[str(centroid)] = f"./data/data{X}.csv"
                 self.centroids.append(centroid)
                 X += 1
+        print(self.assignments)
         closest_K = sort_vectors_by_cosine_similarity(self.centroids,query)[0][:30]
         K_cent = []
         for v in closest_K:
@@ -197,10 +202,10 @@ class IVFile_optimized(object):
                 vector = all_rows[vector]
         return closest_k
                 
-test_vector = [[-0.4665489192145053,-2.4149580061941975,-0.04247832948671558,0.7563412531550323]]
-IV = IVFile_optimized(1000,100000)
-IV.build_index("random_vectors.csv",1)
-vectors = IV.retrieve_k_closest(test_vector,3)
-print(vectors)
-for vector in vectors:
-    print(cosine_similarity(test_vector,vector.reshape(1,-1)))
+# test_vector = [[-0.4665489192145053,-2.4149580061941975,-0.04247832948671558,0.7563412531550323]]
+# IV = IVFile_optimized(1000,100000)
+# IV.build_index("random_vectors.csv",1)
+# vectors = IV.retrieve_k_closest(test_vector,3)
+# print(vectors)
+# for vector in vectors:
+#     print(cosine_similarity(test_vector,vector.reshape(1,-1)),vector)

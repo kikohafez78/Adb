@@ -6,48 +6,32 @@
 # Subject: ADB                                     |
 # Project: HNSW + IVF                              |
 # ==================================================
-import logging as logs
 import math
 import random
-from heapq import heapify, heappop, heappush, heappushpop, heapreplace, nlargest, nsmallest
-from operator import itemgetter
-
+from heapq import nsmallest,heapify, heappop, heappush, heappushpop, heapreplace, nlargest
+from IVF import IVFile
 import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+from operator  import itemgetter
+import logging as logs
 import pandas as pd
 import xlrd as xl
-from sklearn.metrics.pairwise import cosine_similarity
-
-from IVF import IVFile
 from product_quantization import quantizer
 
 
 class HNSW(object):
     def cosine_distance(self, a, b):
         return -np.dot(a, b) / (np.linalg.norm(a) * (np.linalg.norm(b)))
-
     def vectorized_distance_(self, x, ys):
         return [self.distance_func(x, y) for y in ys]
 
-    def __init__(
-        self,
-        m=5,
-        ef=200,
-        m0=None,
-        heuristic=True,
-        efSearch: int = 50,
-        efConstruction: int = 50,
-        vectors: np.ndarray = None,
-        useIVF: bool = False,
-        useQuantizer: bool = False,
-        partitions: int = 3,
-        segments: int = 3,
-    ):
-        self.data: list[np.ndarray] = []
+    def __init__(self,m=5, ef=200, m0=None, heuristic=True,efSearch: int = 50, efConstruction: int = 50, vectors:np.ndarray = None,useIVF:bool = False,useQuantizer: bool = False,partitions:int = 3,segments: int = 3):
+        self.data:list[np.ndarray] = []
         self.distance_func = self.cosine_distance
         self.vectorized_distance = self.vectorized_distance_
         self._m = m
         self._ef = ef
-        self._m0 = np.ceil(np.log2(m0)) if m0 is not None else 2 * self._m
+        self._m0 = np.ceil(np.log2(m0)) if m0 is not None else 2*self._m
         self._level_mult = 1 / math.log2(m)
         self._graphs: list[dict[int : [dict[int, int]]]] = []
         self._enter_point = None
@@ -56,40 +40,33 @@ class HNSW(object):
         self.efSearch = efSearch
         self.efConstruction = efConstruction
         if useIVF and useQuantizer:
-            self.IVF = IVFile(partitions, vectors)
-            self.quantizer = quantizer(len(vectors[0]), segments)
+            self.IVF = IVFile(partitions,vectors)
+            self.quantizer = quantizer(len(vectors[0]),segments)
         elif useIVF and not useQuantizer:
-            self.IVF = self.IVF = IVFile(partitions, vectors)
+            self.IVF = self.IVF = IVFile(partitions,vectors)
             self.quantizer = None
         elif not useIVF and useQuantizer:
-            self.quantizer = quantizer(len(vectors[0]), segments)
+            self.quantizer = quantizer(len(vectors[0]),segments)
             self.IVF = None
         else:
             self.IVF = self.quantizer = None
-
     def get_data(self):
         return self.data
-
-    def similarity(self, query: np.ndarray, neighbor: np.ndarray):
-        return np.dot(query, neighbor) / (np.linalg.norm(query) * np.linalg.norm(neighbor))
-
-    def array_similarity(self, X: np.ndarray, Y: np.ndarray):
-        return self.similarity(X, Y)
-
-    def calculate_distances(self, heap: list, q: np.ndarray):
+    def similarity(self,query: np.ndarray,neighbor: np.ndarray):
+        return np.dot(query,neighbor)/(np.linalg.norm(query) *np.linalg.norm(neighbor))
+    def array_similarity(self,X:np.ndarray,Y:np.ndarray):
+        return self.similarity(X,Y)
+    def calculate_distances(self,heap: list, q: np.ndarray):
         cosine_similarities = [cosine_similarity(list[i], q) for i in heap]
         return cosine_similarities
-
     # functions for creating a heap that are sorted by cosine similarity between elements and query vector
-    def sorted_list_by_cosine_similarity(self, heap: list, query_vector: np.ndarray) -> list[(int, int)]:
+    def sorted_list_by_cosine_similarity(self,heap: list, query_vector: np.ndarray) -> list[(int, int)]:
         heap = [(cosine_similarity(node.vec, query_vector), node) for node in heap]
         heap.sort(reverse=True)  # sort descending
         return heap
-
     def get_layer_location(self):
         return np.round(-float(math.log(random.uniform(0, 1))) * self._level_mult)
-
-    def normal_selection(self, d: dict, to_insert: list[(float, int)], m: int, layer: dict, forward=False):
+    def normal_selection(self, d: dict, to_insert:list[(float,int)], m: int, layer: dict, forward=False):
         if not forward:
             idx, dist = to_insert
             if len(d) < m:
@@ -117,12 +94,11 @@ class HNSW(object):
             del d[idx_old]
             d[idx_new] = -md_new
 
-    def heuristic_selection(self, d: dict, to_insert: list[(float, int)], m: int, g, forward: bool = False):
-        nb_dicts = [g[idx] for idx in d]
 
+    def heuristic_selection(self, d: dict, to_insert:list[(float,int)], m: int, g, forward: bool=False):
+        nb_dicts = [g[idx] for idx in d]
         def prioritize(idx, dist):
             return any(nd.get(idx, float("inf")) < dist for nd in nb_dicts), dist, idx
-
         if not forward:
             idx, dist = to_insert
             to_insert = [prioritize(idx, dist)]
@@ -142,7 +118,7 @@ class HNSW(object):
                 break
             del d[idx_old]
             d[idx_new] = d_new
-
+            
     def search(self, query_element: np.ndarray, ef: int = None, k: int = None):
         graph = self._graphs
         entry_point = self._enter_point
@@ -157,7 +133,7 @@ class HNSW(object):
             entry_point, sim = self.search_layer_ef1(query_element, sim, entry_point, layer)
         candidates = self.search_layer(query_element, [(sim, entry_point)], ef, 0)
         candidates = nlargest(k, candidates)
-        return [(sim, idxs) for sim, idxs in candidates]
+        return [(sim, idxs) for sim, idxs in candidates]    
 
     def fast_insertion(self, elem: np.ndarray):
         distance = self.distance_func
@@ -212,7 +188,7 @@ class HNSW(object):
                     heappush(candidates, (dist, e))
         return best, best_dist
 
-    def search_layer(self, q: np.ndarray, ep: list[(float, int)], layer: dict, ef: int):
+    def search_layer(self, q: np.ndarray, ep:list[(float,int)], layer: dict, ef: int):
         vectorized_distance = self.vectorized_distance
         data = self.data
         candidates = [(-sim, point) for sim, point in ep]
@@ -238,23 +214,39 @@ class HNSW(object):
                     mref = ep[0][0]
 
         return ep
-
     def index_file_creation(self):
         layer_assignment = {}
         graph = self._graphs.copy()
-        for layer, plane in enumerate(reversed(self._graphs)):
+        for layer,plane in enumerate(reversed(self._graphs)):
             l = np.asarray([plane])
-            np.savetxt(f"layer_{layer}.npy", l)
+            np.savetxt(f"layer_{layer}.npy",l)
 
     def get_document_data(self, name):
-        data = pd.read_csv("./" + name)
+        data = pd.read_csv("./"+name)
         pass
-
-    def find_closest(self, element, K=3, ef=None):  # find everything using IVF primitive
+        
+    
+    def search(self, query_element: np.ndarray, ef: int = None, k: int = None):
+        graph = self._graphs
+        entry_point = self._enter_point
+        if entry_point is None:
+            raise Exception("The graph is empty, please insert some elements first")
+        if ef is None:
+            ef = self.efSearch
+        if k is None:
+            k = self._m
+        sim = self.distance_func(query_element, self.data[self._enter_point])
+        for layer in reversed(graph[1:]):  # loop on the layers till you reach layer 1
+            entry_point, sim = self.search_layer_ef1(query_element, entry_point, sim, layer)
+        candidates = self.search_layer(query_element, [(sim, entry_point)], graph[0], ef)
+        candidates = nlargest(k, candidates)
+        return [(sim, idxs) for sim, idxs in candidates]    
+    
+    def find_closest(self,element,K= 3):#find everything using IVF primitive
         if len(self._graphs) == 0 or element is None or K <= 0:
-            return None
+                return None
         if self.IVF is None:
-            return self.search(element, K)
+            return self.search(element,K)
         else:
             graph = self._graphs
             entry_point = self._enter_point
@@ -270,12 +262,12 @@ class HNSW(object):
             candidates = self.search_layer(element, [(sim, entry_point)], graph[0], ef)
             candidates = nlargest(k, candidates)
             return self.IVF.get_K_closest_neighbors_given_centroids(self.data[candidates[:][1]], element, K)
-
-    def search_using_IVF(self, element: np.ndarray, ef: int, K: int):  # finds using advanced IVF
-        pass
-
+ 
+    def search_using_IVF(self,element: np.ndarray,ef:int,K:int): #finds using advanced IVF
+        pass 
     def create_HNSWIVF(self):
         pass
+            
 
     def graph_creation(self):
         if self.IVF is None:
@@ -284,19 +276,18 @@ class HNSW(object):
             self.vectors = None
         else:
             self.clusters = self.IVF.clustering().keys()
-
+            
             for vector in self.vectors:
                 self.fast_insertion(vector)
             self.vectors = None
 
-
-dataset = np.random.normal(size=(100, 3))
-hnsw = HNSW(2, 0, None, True, 50, 50, dataset, False, False, 0, 0)
+dataset = np.random.normal(size=(100,3))
+hnsw = HNSW(2,0,None,True,50,50,dataset,False,False,0,0)
 hnsw.graph_creation()
-vector = np.random.normal(size=(1, 3))
+vector = np.random.normal(size=(1,3))
 print(hnsw._graphs)
-found = hnsw.search(vector, k=4, ef=30)
+found = hnsw.search(vector,k=4,ef=30)
 for f in found:
     print(hnsw.data[f[1]])
-    print(cosine_similarity([hnsw.data[f[1]]], vector))
+    print(cosine_similarity([hnsw.data[f[1]]],vector))
 print(vector)

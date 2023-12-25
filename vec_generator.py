@@ -2,8 +2,8 @@ import numpy as np
 import csv
 
 outfile = 'random_vectors.csv'
-num_vectors = 1000000
-vector_dim = 70
+num_vectors = 100000
+vector_dim = 4
 X = 0
 with open(outfile, 'w', newline='') as csvfile:
     writer = csv.writer(csvfile)
