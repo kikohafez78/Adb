@@ -281,13 +281,13 @@ class HNSW(object):
                 self.fast_insertion(vector)
             self.vectors = None
 
-dataset = np.random.normal(size=(100,3))
-hnsw = HNSW(2,0,None,True,50,50,dataset,False,False,0,0)
-hnsw.graph_creation()
-vector = np.random.normal(size=(1,3))
-print(hnsw._graphs)
-found = hnsw.search(vector,k=4,ef=30)
-for f in found:
-    print(hnsw.data[f[1]])
-    print(cosine_similarity([hnsw.data[f[1]]],vector))
-print(vector)
+# dataset = np.random.normal(size=(100,3))
+# hnsw = HNSW(2,0,None,True,50,50,dataset,False,False,0,0)
+# hnsw.graph_creation()
+# vector = np.random.normal(size=(1,3))
+# print(hnsw._graphs)
+# found = hnsw.search(vector,k=4,ef=30)
+# for f in found:
+#     print(hnsw.data[f[1]])
+#     print(cosine_similarity([hnsw.data[f[1]]],vector))
+# print(vector)
