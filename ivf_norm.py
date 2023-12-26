@@ -93,6 +93,7 @@ class VecDB(object):
             # ===================================================
             for vector in data:
                 vector = np.append(vector, ids)
+                print(vector)
                 clusters[self.assignments[X]].append(vector)
                 X += 1
                 ids += 1
@@ -128,21 +129,22 @@ class VecDB(object):
         full_vectors = []
         for file in files_to_inspect:
             with open(file, "rb") as file:
-                data = pi.load(file)  # Data are with dimensions 70 + 1
-                data = normalize(data)
+                data = np.array(pi.load(file))  # Data are with dimensions 70 + 1
+                data = np.append(normalize(data[:, :70]), data[:, 70:], axis=1)
                 vectors = sort_vectors_by_cosine_similarity(data[:, :70], vector)[0][: K + 1]
                 vectors = [data[vec] for vec in vectors]
                 full_vectors.extend(vectors)
                 # print(full_vectors)
         full_vectors = np.array([vector for vector in full_vectors])
-        final_vectors = sort_vectors_by_cosine_similarity(full_vectors[:70, :], vector.reshape(1, -1))[0][: K + 1]
+        # print(full_vectors.shape)
+        final_vectors = sort_vectors_by_cosine_similarity(full_vectors[:, :70], vector.reshape(1, -1))[0][: K + 1]
         final_vectors = [full_vectors[vec] for vec in final_vectors]
         return final_vectors
 
     def retrive(self, vector: np.ndarray, K: int):  # <===
         vectors = self.get_closest_k_neighbors(vector, K)
-
-        vec_no_ids = [vector[70] for vector in vectors]
+        print(vectors)
+        vec_no_ids = [int(vector[-1]) for vector in vectors]
 
         return vec_no_ids
 
