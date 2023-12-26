@@ -4,13 +4,16 @@ import numpy as np
 from sklearn.cluster import MiniBatchKMeans
 
 from clean_slate import HNSW, IVFile, cosine_similarity, itemgetter, nlargest
-
-
+import itertools
+import pandas as pd
+from sklearn.preprocessing import normalize
 def sort_vectors_by_cosine_similarity(vectors, reference_vector):
     # Calculate cosine similarities
     cos_similarities = cosine_similarity(reference_vector, vectors)
     # Sort indices by cosine similarity
+    print(cos_similarities)
     sorted_indices = np.argsort(cos_similarities)
+    sorted_indices[0] = np.flip(sorted_indices, axis=1)
     return sorted_indices
 
 
@@ -35,97 +38,98 @@ batches = {
     "saved_db_20m": 20000000,
 }
 n_files = {
-    "saved_db_100k": 10,
-    "saved_db_1m": 100,
-    "saved_db_5m": 500,
-    "saved_db_10m": 1000,
-    "saved_db_20m": 2000,
+        "saved_db_100k": 1,
+        "saved_db_1m": 10,
+        "saved_db_5m": 50,
+        "saved_db_10m": 100,
+        "saved_db_20m": 200,
 }
 
 
 class vec_db(object):
     def __init__(self, file_path: str):
         self.folder = file_path
-        self.partitions = np.ceil(sizes[file_path] / np.sqrt(sizes[file_path])) * 3
+        self.partitions = int(np.ceil(sizes[file_path] / np.sqrt(sizes[file_path])) * 3)
         self.batch_size = batches[file_path]
-
+        self.no_of_files = n_files[file_path]
+        self.kmeans = MiniBatchKMeans(n_clusters=self.partitions)
     def insert_records(self, vectors: list):
         self.vectors = vectors
 
     def build_index(self):
-        # ===================================================
-        kmeans = MiniBatchKMeans(n_clusters=self.partitions)
-        kmeans.partial_fit(self.vectors)
-        # ===================================================
-        assignments = kmeans.labels_
-        centroids = kmeans.cluster_centers_
-        self.data = (centroids, assignments)
-        index = [[] for _ in range(self.partitions)]
-        for n, k in enumerate(assignments):
-            index[k].append(self.vectors[n])
-        centroid_assignment = {}
-        x = 0
-        for k in index:
-            byte_file = np.asarray(k)
-            centroid_assignment[str(centroids[x])] = f"./{self.folder}/file{x}.npy"
-            file = open(f"./{self.folder}/file{x}.npy", "a")
-            np.save(f"./{self.folder}/file{x}.npy", byte_file)
-            file.close()
-            x += 1
-        self.assigments = centroid_assignment
-        self.vectors = None  # <===
-        file = open(f"./{self.folder}/clusters.npy", "a")
-        np.save(f"./{self.folder}/clusters.npy", np.asarray([self.assigments]))
-        file.close()
-        return self.assigments
-
-    def get_closest_centroids(self, vector: np.ndarray, K: int):
-        centroids = self.data[0]
-        index = sort_vectors_by_cosine_similarity(centroids, vector)
-        centroids = centroids[index]
-        return centroids[0][len(centroids) - K - 1 :]
-
-    def get_cluster_data(self, centroid: np.ndarray, vector: np.ndarray, K: int):
-        data = np.load(self.assigments[str(centroid)])
-        index = sort_vectors_by_cosine_similarity(data, vector)
-        data = data[index]
-        return data[0][len(data) - K - 1 :]
-
-    def cluster_data(self, centroids: np.ndarray):
-        return [np.load(self.assigments[str(centroid)]) for centroid in centroids]
+        batch = 0
+        for i in range(self.no_of_files):
+            data = np.load(f"./{self.folder}/batch{batch}.npy")
+            data = normalize(data)
+            #===================================================
+            self.kmeans.partial_fit(data)
+            #===================================================
+            batch += 1
+        self.assignments = self.kmeans.labels_
+        self.clusters = self.kmeans.cluster_centers_
+        X = 0
+        for cluster in self.clusters:
+            # file = open(f"./{self.folder}/file{X}.pickle","w")
+            # np.save(f"./{self.folder}/file{X}.pickle",np.array([]))
+            # file.close()
+            with open(f"./{self.folder}/file{X}.pickle","ab") as file:
+                pass
+            X += 1
+        X = 0
+        batch = 0
+        clusters = {x:[] for x in range(len(self.clusters))}
+        for i in range(self.no_of_files):
+            data = np.load(f"./{self.folder}/batch{batch}.npy")
+            #===================================================
+            for vector in data:
+                clusters[self.assignments[X]].append(vector)
+                X += 1
+            #===================================================
+            batch += 1
+        X = 0
+        for  cluster in clusters:
+            with open(f"./{self.folder}/file{X}.pickle","ab") as file:
+                pi.dump(clusters[cluster],file)
+            X += 1
+        X = 0
+        assignments = {}
+        for cluster in self.clusters:
+            assignments[str(X)] = (f"./{self.folder}/file{X}.pickle",cluster)
+            X += 1
+        with open(f"./{self.folder}/clusters.pickle","ab") as file:
+            pi.dump(assignments,file)
+        self.clusters = None
+        self.assignments = None
+        return 
 
     def get_closest_k_neighbors(self, vector: np.ndarray, K: int):  # <===
-        centroids = self.get_closest_centroids(vector, K)
-        closest = []
-        for centroid in centroids:
-            closest.append(self.get_cluster_data(centroid, vector, K))
-        closest = np.asarray(closest)
-        closest = closest.reshape((closest.shape[0] * closest.shape[1], closest.shape[2]))
-        indices = sort_vectors_by_cosine_similarity(closest, vector)
-        return [closest[i] for i in indices[0][len(closest) - K - 1 :]]
-
-    def get_K_closest_neighbors_given_centroids(self, centroids: np.ndarray, vector: np.ndarray, K: int):
-        closest = []
-        for centroid in centroids:
-            closest.append(self.get_cluster_data(centroid, vector, K))
-        closest = np.asarray(closest)
-        closest = closest.reshape((closest.shape[0] * closest.shape[1], closest.shape[2]))
-        indices = sort_vectors_by_cosine_similarity(closest, vector)
-        return [closest[i] for i in indices[0][len(closest) - K - 1 :]]
-
-    def get_K_closest_neigbors_inside_centroid_space(self, centroids: np.ndarray, vector: np.ndarray, K: int):
-        centroids = self.get_closest_centroids(vector, 1)
-        closest = []
-        for centroid in centroids:
-            closest.append(self.get_cluster_data(centroid, vector, K))
-        closest = np.asarray(closest)
-        closest = closest.reshape((closest.shape[0] * closest.shape[1], closest.shape[2]))
-        indices = sort_vectors_by_cosine_similarity(closest, vector)
-        return [closest[i] for i in indices[0][len(closest) - K - 1 :]]
-
+        vector = normalize([vector])
+        with open(f"./{self.folder}/clusters.pickle","rb") as file:
+            self.clusters = pi.load(file)
+        centroids = [self.clusters[str(centroid)][1] for centroid in range(self.partitions)]
+        files = [self.clusters[str(centroid)][0] for centroid in range(self.partitions)]
+        vectors = sort_vectors_by_cosine_similarity(centroids,vector)[0][:30]
+        files_to_inspect = [files[x] for x in vectors]
+        full_vectors = []
+        for file in files_to_inspect:
+            with open(file,"rb") as file:
+                data = pi.load(file)
+                data = normalize(data)
+                vectors = sort_vectors_by_cosine_similarity(data[:][:70],vector)[0][:K+1]
+                vectors = [data[vec] for vec in vectors]
+                full_vectors.extend(vectors)
+        full_vectors = [vector[:70] for vector in full_vectors]
+        final_vectors = sort_vectors_by_cosine_similarity(full_vectors,vector.reshape(1,-1))[0][:K+1]
+        final_vectors = [full_vectors[vec] for vec in final_vectors]
+        return final_vectors
+            
 
 # Example usage:
-dataset = np.random.normal(size=(200, 3))
-vecDB = vec_db("saved_db_100k.npy", dataset)  # Use the appropriate file path
-vecDB.build_index()
-vector = np.random.normal(size=(1, 3))
+vecDB = vec_db("saved_db_100k")   # Use the appropriate file path
+vector = np.load("./saved_db_100k/batch0.npy")[0]
+# print(vecDB.build_index())
+# print(pd.read_pickle("./saved_db_100k/clusters.pickle"))
+vectors = vecDB.get_closest_k_neighbors(vector,3)
+vec_no_ids = [vector[:70] for vector in vectors]
+for vector_no_id in vec_no_ids:
+    print(cosine_similarity([vector_no_id],[vector]))
