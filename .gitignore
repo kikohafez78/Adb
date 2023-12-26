@@ -3,3 +3,16 @@ __pycache__
 adb-env
 data/*
 test_data/*
+saved_db_100k/*
+saved_db_1m/*
+saved_db_5m/*
+saved_db_10m/*
+saved_db_15m/*
+saved_db_20m/*
+
+saved_db_1m.zip
+saved_db_5m.zip
+saved_db_15m.zip
+saved_db_20m.zip
+saved_db_10m.zip
+saved_db_100k.zip

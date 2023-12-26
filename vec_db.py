@@ -32,7 +32,7 @@ folders = {
 }
 
 
-class vec_db(object):
+class VecDB(object):
     def __init__(self, file_name: str):
         self.file = file_name
         self.folder_path = folders[file_name]
@@ -53,4 +53,4 @@ class vec_db(object):
         return self.Ivf.retrieve_k_closest(query, K)
 
 
-vecdb = vec_db()
+vecdb = VecDB()
