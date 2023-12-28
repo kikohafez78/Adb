@@ -149,7 +149,7 @@ class VecDB(object):
         centroids = [self.clusters[str(centroid)][1] for centroid in range(self.partitions)]
         print(self.partitions)
         files = [self.clusters[str(centroid)][0] for centroid in range(self.partitions)]
-        vectors = sort_vectors_by_cosine_similarity(centroids, vector)[0][:100]
+        vectors = sort_vectors_by_cosine_similarity(centroids, vector)[0][:50]
         files_to_inspect = [files[x] for x in vectors]
         full_vectors = []
         for file in files_to_inspect:
@@ -166,31 +166,48 @@ class VecDB(object):
         final_vectors = [full_vectors[vec] for vec in final_vectors]
         return final_vectors
             
-
+    def get_closest_k(self,vector: np.ndarray):
+        vector = normalize(vector.reshape(1, -1))
+        with open(f"./{self.folder}/batch0.npy", "rb") as file:
+            self.vectors = np.load(file)
+        X = 0
+        best_sim = -1
+        best_K = None
+        loc = 0
+        for vec in self.vectors:
+            print(X)
+            sim = cosine_similarity([vec],vector)
+            if sim > best_sim:
+                best_sim = sim
+                best_K = vec
+                loc = X
+            X += 1
+        ids = [30300, 59616, 25571, 69854, 51945]
+        similar = [self.vectors[id] for id in ids]
+        return best_sim,best_K,loc,similar
     def retrive(self, vector: np.ndarray, K: int):  # <===
         vectors = self.get_closest_k_neighbors(vector, K)
         # print(vectors)
         vec_no_ids = [int(vector[-1]) for vector in vectors]
-
         return vec_no_ids
 
 
-# # # # Example usage:
+# # # # # Example usage:
 # vecDB = VecDB("saved_db_100k")  # Use the appropriate file path
 # # vector = np.load("./saved_db_100k/batch0.npy")[0]  # dimension 70
 # print(vecDB.build_index())
-# # # print(pd.read_pickle("./saved_db_100k/clusters.pickle"))
-# # vectors = vecDB.get_closest_k_neighbors(vector, 3)
-# ids = vecDB.retrive(vector, 3)
-# print(ids)
-# # vec_no_ids = [vector[:70] for vector in vectors]
-# # for vector_no_id in vec_no_ids:
-# #     print(cosine_similarity([vector_no_id], [vector]))
-# rng = np.random.default_rng(20)
-# vectors = rng.random((10**4, 70), dtype=np.float32)
-# records_dict = [{"id": i, "embed": list(row)} for i, row in enumerate(vectors)]
-# # vecDB = VecDB()
-# # vecDB.insert_records(records_dict)
+# # # # print(pd.read_pickle("./saved_db_100k/clusters.pickle"))
+# # # vectors = vecDB.get_closest_k_neighbors(vector, 3)
+# # ids = vecDB.retrive(vector, 3)
+# # print(ids)
+# # # vec_no_ids = [vector[:70] for vector in vectors]
+# # # for vector_no_id in vec_no_ids:
+# # #     print(cosine_similarity([vector_no_id], [vector]))
+# # rng = np.random.default_rng(20)
+# # vectors = rng.random((10**4, 70), dtype=np.float32)
+# # records_dict = [{"id": i, "embed": list(row)} for i, row in enumerate(vectors)]
+# # # vecDB = VecDB()
+# # # vecDB.insert_records(records_dict)
 # test_vector = np.array([[0.5304362  ,0.1494149  ,0.4865445  ,0.13678914 ,0.24513423 ,0.24892092
 #   ,0.02200389 ,0.38282466 ,0.7204832  ,0.649079   ,0.77705085 ,0.83756375
 #   ,0.06120175 ,0.7760319  ,0.11445612 ,0.33951557 ,0.08761412 ,0.14856869
@@ -203,6 +220,10 @@ class VecDB(object):
 #   ,0.80520135 ,0.06865561, 0.15775746 ,0.81673443, 0.65432876, 0.881835
 #   ,0.4614241 , 0.4235164 , 0.24339634, 0.8332293,  0.15596849, 0.3410167
 #   ,0.06857234, 0.5197915 , 0.6052311 , 0.54920644]])
-# vecDB = VecDB("saved_db_100k")
 # db_ids = vecDB.retrive(test_vector,5)
 # print(db_ids)
+# # vecDB = VecDB("saved_db_100k")
+# # sim,vector,id,similar = vecDB.get_closest_k(test_vector)
+# # print(sim,vector,id)
+# # for sim in similar:
+# #     print(cosine_similarity(normalize([sim]),normalize(test_vector)))

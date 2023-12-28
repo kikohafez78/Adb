@@ -13,9 +13,8 @@ def sort_vectors_by_cosine_similarity(vectors, reference_vector):
     # Calculate cosine similarities
     cos_similarities = cosine_similarity(reference_vector, vectors)
     # Sort indices by cosine similarity
-    # print(cos_similarities)
     sorted_indices = np.argsort(cos_similarities)
-    sorted_indices[0] = np.flip(sorted_indices, axis=1)
+    # sorted_indices[0] = np.flip(sorted_indices, axis=1)
     return sorted_indices
 
 
@@ -112,24 +111,19 @@ class VecDB(object):
         batch = 0
         clusters = {x: [] for x in range(len(self.clusters))}
         ids = 0
-        X = 0
-        assignments = {}
-        for cluster in self.clusters:
-            assignments[str(X)] = (f"./{self.folder}/file{X}.pickle", cluster)
-            X += 1
-        with open(f"./{self.folder}/clusters.pickle", "ab") as file:
-            pi.dump(assignments, file)
         for i in range(self.no_of_files):
             data = np.load(f"./{self.folder}/batch{batch}.npy")
             # ===================================================
             for vector in data:
+                vector = normalize([vector])
                 get_cluster = sort_vectors_by_cosine_similarity(self.clusters,vector)[0][0]
                 vector = np.append(vector, ids)
                 # print(vector)
-                clusters[self.assignments[X]].append(vector)
+                clusters[get_cluster].append(vector)
+                print(ids)
                 X += 1
                 ids += 1
-            X = 0
+            # X = 0
             # ===================================================
             batch += 1
         X = 0
@@ -137,7 +131,13 @@ class VecDB(object):
             with open(f"./{self.folder}/file{X}.pickle", "ab") as file:
                 pi.dump(clusters[cluster], file)
             X += 1
-        
+        X = 0
+        assignments = {}
+        for cluster in self.clusters:
+            assignments[str(X)] = (f"./{self.folder}/file{X}.pickle", cluster)
+            X += 1
+        with open(f"./{self.folder}/clusters.pickle", "ab") as file:
+            pi.dump(assignments, file)
         self.clusters = None
         self.assignments = None
         return
@@ -151,7 +151,7 @@ class VecDB(object):
         centroids = [self.clusters[str(centroid)][1] for centroid in range(self.partitions)]
         print(self.partitions)
         files = [self.clusters[str(centroid)][0] for centroid in range(self.partitions)]
-        vectors = sort_vectors_by_cosine_similarity(centroids, vector)[0][:100]
+        vectors = sort_vectors_by_cosine_similarity(centroids, vector)[0][:50]
         files_to_inspect = [files[x] for x in vectors]
         full_vectors = []
         for file in files_to_inspect:
@@ -167,17 +167,15 @@ class VecDB(object):
         final_vectors = sort_vectors_by_cosine_similarity(full_vectors[:, :70], vector.reshape(1, -1))[0][: K]
         final_vectors = [full_vectors[vec] for vec in final_vectors]
         return final_vectors
-            
 
     def retrive(self, vector: np.ndarray, K: int):  # <===
         vectors = self.get_closest_k_neighbors(vector, K)
         # print(vectors)
         vec_no_ids = [int(vector[-1]) for vector in vectors]
-
         return vec_no_ids
 
 
-# # # # Example usage:
+# # # Example usage:
 # vecDB = VecDB("saved_db_100k")  # Use the appropriate file path
 # # vector = np.load("./saved_db_100k/batch0.npy")[0]  # dimension 70
 # print(vecDB.build_index())
@@ -193,18 +191,19 @@ class VecDB(object):
 # records_dict = [{"id": i, "embed": list(row)} for i, row in enumerate(vectors)]
 # # vecDB = VecDB()
 # # vecDB.insert_records(records_dict)
-test_vector = np.array([[0.5304362  ,0.1494149  ,0.4865445  ,0.13678914 ,0.24513423 ,0.24892092
-  ,0.02200389 ,0.38282466 ,0.7204832  ,0.649079   ,0.77705085 ,0.83756375
-  ,0.06120175 ,0.7760319  ,0.11445612 ,0.33951557 ,0.08761412 ,0.14856869
-  ,0.4816984  ,0.45701933 ,0.35744345 ,0.4378643  ,0.42141086 ,0.57421756
-  ,0.6229626  ,0.3732692  ,0.75553846 ,0.633825   ,0.48633796 ,0.11464435
-  ,0.83315873 ,0.23309046 ,0.33111197 ,0.767241   ,0.8557654  ,0.98712426
-  ,0.8222418  ,0.80800104 ,0.7386268  ,0.8429656  ,0.5602805  ,0.79568267
-  ,0.24378216 ,0.4568413 , 0.7938885 , 0.73867065, 0.42071766 ,0.578455
-  ,0.36776322 ,0.4507355 , 0.03630698 ,0.2710244,  0.7429225 ,0.8646031
-  ,0.80520135 ,0.06865561, 0.15775746 ,0.81673443, 0.65432876, 0.881835
-  ,0.4614241 , 0.4235164 , 0.24339634, 0.8332293,  0.15596849, 0.3410167
-  ,0.06857234, 0.5197915 , 0.6052311 , 0.54920644]])
-vecDB = VecDB("saved_db_100k")
-db_ids = vecDB.retrive(test_vector,5)
-print(db_ids)
+# test_vector = np.array([[0.5304362  ,0.1494149  ,0.4865445  ,0.13678914 ,0.24513423 ,0.24892092
+#   ,0.02200389 ,0.38282466 ,0.7204832  ,0.649079   ,0.77705085 ,0.83756375
+#   ,0.06120175 ,0.7760319  ,0.11445612 ,0.33951557 ,0.08761412 ,0.14856869
+#   ,0.4816984  ,0.45701933 ,0.35744345 ,0.4378643  ,0.42141086 ,0.57421756
+#   ,0.6229626  ,0.3732692  ,0.75553846 ,0.633825   ,0.48633796 ,0.11464435
+#   ,0.83315873 ,0.23309046 ,0.33111197 ,0.767241   ,0.8557654  ,0.98712426
+#   ,0.8222418  ,0.80800104 ,0.7386268  ,0.8429656  ,0.5602805  ,0.79568267
+#   ,0.24378216 ,0.4568413 , 0.7938885 , 0.73867065, 0.42071766 ,0.578455
+#   ,0.36776322 ,0.4507355 , 0.03630698 ,0.2710244,  0.7429225 ,0.8646031
+#   ,0.80520135 ,0.06865561, 0.15775746 ,0.81673443, 0.65432876, 0.881835
+#   ,0.4614241 , 0.4235164 , 0.24339634, 0.8332293,  0.15596849, 0.3410167
+#   ,0.06857234, 0.5197915 , 0.6052311 , 0.54920644]])
+# vecDB = VecDB("saved_db_100k")
+# db_ids,vectors = vecDB.retrive(test_vector,5)
+# print(db_ids)
+# print(cosine_similarity(test_vector,vectors[:][:70]))
